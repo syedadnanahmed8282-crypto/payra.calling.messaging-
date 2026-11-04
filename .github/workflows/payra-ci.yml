@@ -1,0 +1,101 @@
+name: Payra CI
+
+# 1) Upload a ZIP (made by Claude) to the ROOT of the repo -> this workflow unpacks it,
+#    commits the files, and builds a debug APK.
+# 2) Any other push to main, or "Run workflow", just builds the APK.
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: payra-ci
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply uploaded ZIP files
+        shell: bash
+        run: |
+          set -e
+          shopt -s nullglob
+          zips=(*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No ZIP in repo root - nothing to unpack."
+            exit 0
+          fi
+          IFS=$'\n' zips=($(printf '%s\n' "${zips[@]}" | sort))
+          for z in "${zips[@]}"; do
+            echo "== Unpacking $z"
+            tmp=$(mktemp -d)
+            unzip -q -o "$z" -d "$tmp"
+            # Workflow files can not be changed by this job (GitHub rule) - skip them.
+            rm -rf "$tmp/.github"
+            if [ -f "$tmp/_delete.txt" ]; then
+              while IFS= read -r p || [ -n "$p" ]; do
+                [ -z "$p" ] && continue
+                case "$p" in
+                  /*|*..*) echo "Skipping unsafe path: $p"; continue ;;
+                esac
+                echo "Deleting $p"
+                rm -rf -- "$p"
+              done < "$tmp/_delete.txt"
+              rm -f "$tmp/_delete.txt"
+            fi
+            cp -a "$tmp"/. .
+            rm -rf "$tmp"
+            git rm -q -f -- "$z"
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply ZIP: ${zips[*]}"
+          git push
+          echo "Applied: ${zips[*]}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Setup Android SDK path
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Build Debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle assembleDebug --stacktrace -Djava.awt.headless=true 2>&1 | tee build.log
+
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payra-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 3
+
+      - name: Upload build log (when the build fails)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payra-build-log
+          path: build.log
+          retention-days: 3

@@ -1,11 +1,12 @@
-<div align="center">
+# Payra
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Messaging + calling app (Kotlin, Jetpack Compose).
 
-  <h1>Built with AI Studio</h2>
+## How code gets in
+Claude sends a ZIP. Upload the ZIP to the ROOT of this repo (Add file -> Upload files -> Commit to main).
+The "Payra CI" workflow unpacks it, commits the files and builds a debug APK
+(Actions -> latest run -> Artifacts -> `payra-debug-apk`).
+If the build fails, download the `payra-build-log` artifact and send it to Claude.
 
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+To delete files, the ZIP can contain a `_delete.txt` with one path per line.
+Workflow files (`.github/workflows/`) must be edited by hand on GitHub.

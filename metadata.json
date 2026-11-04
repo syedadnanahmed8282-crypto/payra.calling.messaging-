@@ -1,0 +1,7 @@
+{
+  "name": "Payra",
+  "description": "Payra messaging and calling app with Liquid Glass design system, Supabase, Cloudinary, Agora, and FCM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
