@@ -18,13 +18,6 @@ android {
     // A committed debug keystore keeps the debug signature identical on every CI build,
     // so a new APK installs over the old one without uninstalling first.
     signingConfigs {
-        create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-            storeFile = file(keystorePath)
-            storePassword = System.getenv("STORE_PASSWORD")
-            keyAlias = "upload"
-            keyPassword = System.getenv("KEY_PASSWORD")
-        }
         create("debugConfig") {
             storeFile = file("${rootDir}/debug.keystore")
             storePassword = "android"
@@ -35,13 +28,16 @@ android {
 
     buildTypes {
         release {
-            isCrunchPngs = false
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
         }
         debug {
-            signingConfig = signingConfigs.getByName("debugConfig")
+            val customDebugKeystore = file("${rootDir}/debug.keystore")
+            // Use the committed keystore only if it is a real, non-empty file; otherwise Android uses its own debug key.
+            if (customDebugKeystore.isFile && customDebugKeystore.length() > 0L) {
+                signingConfig = signingConfigs.getByName("debugConfig")
+            }
         }
     }
 
