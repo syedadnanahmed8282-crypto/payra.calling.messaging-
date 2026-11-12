@@ -13,7 +13,14 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -54,17 +61,27 @@ fun PayraPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = M
 }
 
 @Composable
-fun AvatarCircle(initial: String, color: Color, size: Dp = 48.dp, modifier: Modifier = Modifier) {
+fun AvatarCircle(
+    initial: String,
+    color: Color,
+    size: Dp = 48.dp,
+    modifier: Modifier = Modifier,
+    imageUri: String = "",
+) {
     Box(
         modifier = modifier.size(size).clip(CircleShape).background(color),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = initial,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = (size.value * 0.4f).sp,
-        )
+        if (imageUri.isNotEmpty()) {
+            PayraImage(model = imageUri, modifier = Modifier.fillMaxSize())
+        } else {
+            Text(
+                text = initial,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = (size.value * 0.4f).sp,
+            )
+        }
     }
 }
 
@@ -166,6 +183,47 @@ fun GlassTabBar(
                         Text(item.label, color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/** A search box you can really type in (used on the chat list, contacts, new chat and forward screens). */
+@Composable
+fun GlassSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+) {
+    GlassSurface(modifier = modifier.fillMaxWidth(), shape = PayraShapes.Field) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Search, contentDescription = null, tint = PayraColors.Muted, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Box(modifier = Modifier.weight(1f)) {
+                if (value.isEmpty()) {
+                    Text(placeholder, color = PayraColors.Muted, fontSize = 16.sp)
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = TextStyle(color = PayraColors.Ink, fontSize = 16.sp),
+                    cursorBrush = SolidColor(PayraColors.Primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (value.isNotEmpty()) {
+                Icon(
+                    Icons.Outlined.Close,
+                    contentDescription = "Clear",
+                    tint = PayraColors.Muted,
+                    modifier = Modifier.size(20.dp).bouncyClick(onClick = { onValueChange("") }, pressedScale = 0.8f),
+                )
             }
         }
     }

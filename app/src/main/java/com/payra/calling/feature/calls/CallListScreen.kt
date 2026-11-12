@@ -96,11 +96,11 @@ fun CallListScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
-        TextLink(
-            text = "Simulate an incoming call (demo)",
-            onClick = { onCall("ayesha", true, false) },
-            modifier = Modifier.padding(start = 6.dp).enterFromBottom(2),
-        )
+        Row(modifier = Modifier.padding(start = 6.dp).enterFromBottom(2)) {
+            TextLink(text = "Demo: incoming voice call", onClick = { onCall("ayesha", true, false) })
+            Spacer(Modifier.width(16.dp))
+            TextLink(text = "Demo: incoming video call", onClick = { onCall("ayesha", true, true) })
+        }
         Spacer(Modifier.height(12.dp))
 
         GlassSurface(modifier = Modifier.fillMaxSize()) {

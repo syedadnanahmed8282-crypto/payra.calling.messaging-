@@ -7,14 +7,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
-data class Contact(val id: String, val name: String, val about: String, val color: Color)
+data class Contact(
+    val id: String,
+    val name: String,
+    val about: String,
+    val color: Color,
+    /** Real profile photo / cover picture (a content URI as text), empty = colored letter. */
+    val avatarUri: String = "",
+    val coverUri: String = "",
+)
 
-enum class MessageKind { Text, Image, Video, Voice, File, Location, ContactCard }
+enum class MessageKind { Text, Image, Video, Voice, File, Location, ContactCard, CallLog }
 
 enum class MessageStatus { Sending, Sent, Delivered, Read, Failed }
 
 /** A fake photo / video (just a colored picture) until real media is connected. [tone] picks the colors. */
-data class MediaItem(val tone: Int, val isVideo: Boolean = false, val duration: String = "")
+data class MediaItem(val tone: Int, val isVideo: Boolean = false, val duration: String = "", val uri: String = "")
 
 data class Reaction(val emoji: String, val count: Int, val mine: Boolean)
 
@@ -33,10 +41,14 @@ data class ChatMessage(
     val audioPath: String = "",
     val fileName: String = "",
     val fileInfo: String = "",
+    val fileUri: String = "",
     val placeName: String = "",
     val placeAddress: String = "",
     val contactName: String = "",
     val contactPhone: String = "",
+    /** Call log entries (kind = CallLog): video or voice, and whether it was missed. */
+    val callVideo: Boolean = false,
+    val callMissed: Boolean = false,
     val replyTo: ReplyRef? = null,
     val edited: Boolean = false,
     val forwarded: Boolean = false,
@@ -56,6 +68,7 @@ fun ChatMessage.preview(): String {
         MessageKind.File -> fileName.ifBlank { "Document" }
         MessageKind.Location -> "Location"
         MessageKind.ContactCard -> "Contact: $contactName"
+        MessageKind.CallLog -> if (callMissed) "Missed ${if (callVideo) "video" else "voice"} call" else if (callVideo) "Video call" else "Voice call"
     }
 }
 
@@ -65,4 +78,16 @@ class Conversation(val contact: Contact) {
     var pinned by mutableStateOf(false)
     var muted by mutableStateOf(false)
     var archived by mutableStateOf(false)
+
+    /** -1 = use the app wallpaper; otherwise the index of a wallpaper used only in this chat. */
+    var wallpaper by mutableIntStateOf(-1)
+    var wallpaperUri by mutableStateOf("")
+}
+
+/** Finds web links inside a text. */
+fun String.findUrls(): List<String> {
+    val matcher = android.util.Patterns.WEB_URL.matcher(this)
+    val found = mutableListOf<String>()
+    while (matcher.find()) found.add(matcher.group())
+    return found
 }

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.payra.calling.data.UiPrefs
 
 /**
  * The one place that draws "glass". Every screen uses this, so the look can be changed here only.
@@ -33,7 +34,7 @@ fun GlassSurface(
 ) {
     val backdrop = LocalGlassBackdrop.current
     val onBar = backdrop != null
-    val blurred = onBar && Build.VERSION.SDK_INT >= 31
+    val blurred = onBar && Build.VERSION.SDK_INT >= 31 && !UiPrefs.reduceEffects
     val frosted = onBar && !blurred
     val alpha = when {
         blurred -> minOf(fillAlpha, 0.40f)

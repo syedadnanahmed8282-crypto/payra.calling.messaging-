@@ -50,7 +50,7 @@ import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.preview
 import com.payra.calling.designsystem.AvatarCircle
 import com.payra.calling.designsystem.GlassCircleButton
-import com.payra.calling.designsystem.GlassPillField
+import com.payra.calling.designsystem.GlassSearchField
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.IllustrationCircle
 import com.payra.calling.designsystem.PayraColors
@@ -70,7 +70,14 @@ fun ChatListScreen(
     onOpenArchived: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
-    val visible = FakeChatStore.conversations.filter { !it.archived }.sortedByDescending { it.pinned }
+    var query by remember { mutableStateOf("") }
+    val visible = FakeChatStore.conversations
+        .filter { !it.archived }
+        .filter { c ->
+            query.isBlank() || c.contact.name.contains(query, ignoreCase = true) ||
+                c.messages.any { !it.deleted && it.preview().contains(query, ignoreCase = true) }
+        }
+        .sortedByDescending { it.pinned }
     val archivedCount = FakeChatStore.conversations.count { it.archived }
     var sheetConvo by remember { mutableStateOf<Conversation?>(null) }
     var showSheet by remember { mutableStateOf(false) }
@@ -96,9 +103,10 @@ fun ChatListScreen(
                 GlassCircleButton(icon = Icons.Outlined.Add, contentDescription = "New chat", onClick = onNewChat)
             }
             Spacer(Modifier.height(16.dp))
-            GlassPillField(
-                placeholder = "Search",
-                icon = Icons.Outlined.Search,
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search chats and messages",
                 modifier = Modifier.enterFromBottom(1),
             )
             Spacer(Modifier.height(16.dp))
@@ -116,7 +124,7 @@ fun ChatListScreen(
                             bottom = contentPadding.calculateBottomPadding() + 8.dp,
                         ),
                     ) {
-                        if (archivedCount > 0) {
+                        if (archivedCount > 0 && query.isBlank()) {
                             item(key = "archived") {
                                 Row(
                                     modifier = Modifier

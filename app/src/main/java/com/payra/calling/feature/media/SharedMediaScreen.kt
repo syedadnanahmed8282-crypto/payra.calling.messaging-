@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.sp
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.MediaItem
 import com.payra.calling.data.MessageKind
+import com.payra.calling.data.findUrls
+import androidx.compose.material.icons.outlined.Link
 import com.payra.calling.designsystem.GlassScaffold
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.PayraColors
@@ -58,6 +60,7 @@ import com.payra.calling.feature.chats.MediaTile
 @Composable
 fun SharedMediaScreen(contactId: String, onBack: () -> Unit, onOpenMedia: (MediaItem) -> Unit) {
     val convo = remember(contactId) { FakeChatStore.conversationFor(contactId) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var tab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Media", "Files", "Links")
 
@@ -171,7 +174,51 @@ fun SharedMediaScreen(contactId: String, onBack: () -> Unit, onOpenMedia: (Media
                         .fillMaxSize()
                         .padding(top = padding.calculateTopPadding() + 12.dp, start = 16.dp, end = 16.dp),
                 ) {
-                    Text("No links shared yet", color = PayraColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(8.dp))
+                    val links = convo.messages
+                        .filter { !it.deleted && it.kind == MessageKind.Text }
+                        .flatMap { message -> message.text.findUrls().map { url -> url to message } }
+                    if (links.isEmpty()) {
+                        Text("No links shared yet", color = PayraColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(8.dp))
+                    } else {
+                        GlassSurface(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                links.forEach { (url, message) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .bouncyClick(
+                                                onClick = {
+                                                    try {
+                                                        val target = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
+                                                        context.startActivity(
+                                                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target))
+                                                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                                        )
+                                                    } catch (e: Exception) {
+                                                        android.widget.Toast.makeText(context, "No browser found", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                },
+                                                pressedScale = 0.97f,
+                                            )
+                                            .padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(PayraColors.Primary.copy(alpha = 0.12f)),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(Icons.Outlined.Link, contentDescription = null, tint = PayraColors.Primary, modifier = Modifier.size(22.dp))
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(url, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Primary, maxLines = 1)
+                                            Text(message.time, fontSize = 12.sp, color = PayraColors.Muted)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

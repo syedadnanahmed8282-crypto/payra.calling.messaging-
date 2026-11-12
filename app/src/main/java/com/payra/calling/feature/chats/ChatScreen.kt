@@ -2,6 +2,8 @@ package com.payra.calling.feature.chats
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,7 +15,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -26,7 +27,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -41,11 +41,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,13 +57,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Call
@@ -68,15 +67,13 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -85,7 +82,6 @@ import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -99,9 +95,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -109,15 +104,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.payra.calling.data.ChatMessage
 import com.payra.calling.data.Contact
+import com.payra.calling.data.DeviceData
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.MediaItem
 import com.payra.calling.data.MessageKind
@@ -136,6 +131,7 @@ import com.payra.calling.designsystem.bouncyClick
 import com.payra.calling.designsystem.popIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import kotlin.math.roundToInt
 
 private enum class BannerKind { Reply, Edit }
@@ -146,7 +142,8 @@ private data class SelectedSpot(val offset: Int, val size: Int, val sent: Boolea
 /**
  * The full chat. Messages scroll under the glass bars. Long-press selects (emoji row next to the message,
  * reply, edit, forward, copy, delete), double-tap hearts a message, swipe right replies, the first tap on the
- * call icon opens audio / video choices, the mic records a real voice message.
+ * call icon opens audio / video choices, the mic records a real voice message, the paperclip sends real
+ * photos, videos, files, contacts and locations. All sheets are drawn above the message bar.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -154,14 +151,15 @@ fun ChatScreen(
     contactId: String,
     onBack: () -> Unit,
     onForward: (List<Long>) -> Unit,
-    onCall: (Boolean) -> Unit = {},
-    onOpenProfile: () -> Unit = {},
-    onOpenMedia: (Int, Boolean) -> Unit = { _, _ -> },
-    onOpenPicker: () -> Unit = {},
-    onOpenCamera: () -> Unit = {},
-    onOpenSearch: () -> Unit = {},
-    onOpenSharedMedia: () -> Unit = {},
-    onOpenWallpaper: () -> Unit = {},
+    onCall: (Boolean) -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenMedia: (MediaItem) -> Unit,
+    onOpenPicker: () -> Unit,
+    onOpenContactPicker: () -> Unit,
+    onOpenShareLocation: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenSharedMedia: () -> Unit,
+    onOpenWallpaper: () -> Unit,
 ) {
     val convo = remember(contactId) { FakeChatStore.conversationFor(contactId) }
     val baselineId = remember(contactId) { convo.messages.lastOrNull()?.id ?: 0L }
@@ -170,6 +168,8 @@ fun ChatScreen(
     val haptics = LocalHapticFeedback.current
     val clipboard = LocalClipboardManager.current
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     var typing by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
@@ -182,6 +182,8 @@ fun ChatScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showClear by remember { mutableStateOf(false) }
     var showBlock by remember { mutableStateOf(false) }
+    var showReactionSheet by remember { mutableStateOf(false) }
+    var emojiOpen by remember { mutableStateOf(false) }
     var callExpanded by remember { mutableStateOf(false) }
     var lastSpot by remember { mutableStateOf<SelectedSpot?>(null) }
 
@@ -189,6 +191,7 @@ fun ChatScreen(
     val selectedMessages = convo.messages.filter { it.id in selected }
     val bannerMessage = editTarget ?: replyTarget
     val bannerKind = if (editTarget != null) BannerKind.Edit else BannerKind.Reply
+    val palette = if (convo.wallpaper >= 0) Wallpapers.all[convo.wallpaper.coerceIn(0, Wallpapers.all.lastIndex)] else Wallpapers.current
 
     LaunchedEffect(contactId) { convo.unread = 0 }
     LaunchedEffect(bannerMessage?.id) { if (bannerMessage != null) shownBanner = bannerMessage }
@@ -202,7 +205,7 @@ fun ChatScreen(
     LaunchedEffect(draft) { if (draft.isNotEmpty()) callExpanded = false }
 
     val itemCount = 1 + convo.messages.size + (if (typing) 1 else 0)
-    LaunchedEffect(itemCount) { listState.animateScrollToItem(itemCount - 1) }
+    LaunchedEffect(itemCount, emojiOpen) { listState.animateScrollToItem(itemCount - 1) }
     val showJump by remember { derivedStateOf { listState.canScrollForward } }
 
     // Position of the single selected message, so the emoji row can sit right next to it.
@@ -220,13 +223,18 @@ fun ChatScreen(
     }
     LaunchedEffect(spot) { if (spot != null) lastSpot = spot }
 
-    BackHandler(enabled = selecting || showAttach || showDelete || showMenu || showClear || showBlock || callExpanded || bannerMessage != null) {
+    BackHandler(
+        enabled = selecting || showAttach || showDelete || showMenu || showClear || showBlock ||
+            showReactionSheet || emojiOpen || callExpanded || bannerMessage != null,
+    ) {
         when {
+            showReactionSheet -> showReactionSheet = false
             showDelete -> showDelete = false
             showClear -> showClear = false
             showBlock -> showBlock = false
             showAttach -> showAttach = false
             showMenu -> showMenu = false
+            emojiOpen -> emojiOpen = false
             callExpanded -> callExpanded = false
             selecting -> selected.clear()
             else -> {
@@ -269,6 +277,65 @@ fun ChatScreen(
         runDelivery(message.id)
     }
 
+    fun sendMediaItems(items: List<MediaItem>) {
+        val message = FakeChatStore.sendMedia(convo, items)
+        FakeChatStore.simulateDelivery(convo, message.id, 2200L)
+    }
+
+    // ---------- real camera, video and document ----------
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCamera by remember { mutableIntStateOf(0) }
+
+    fun newCaptureUri(extension: String): Uri {
+        val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+        val file = File(dir, "capture_${System.currentTimeMillis()}.$extension")
+        return FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+    }
+
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = captureUri
+        if (ok && uri != null) sendMediaItems(listOf(MediaItem(0, false, "", uri.toString())))
+    }
+    val recordVideo = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
+        val uri = captureUri
+        if (ok && uri != null) {
+            sendMediaItems(listOf(MediaItem(0, true, DeviceData.videoDurationLabel(context, uri), uri.toString())))
+        }
+    }
+    val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val (name, info) = DeviceData.fileInfo(context, uri)
+            val message = FakeChatStore.sendFile(convo, name, info, uri.toString())
+            FakeChatStore.simulateDelivery(convo, message.id, 2200L)
+        }
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            if (pendingCamera == 1) {
+                val uri = newCaptureUri("jpg")
+                captureUri = uri
+                takePhoto.launch(uri)
+            } else if (pendingCamera == 2) {
+                val uri = newCaptureUri("mp4")
+                captureUri = uri
+                recordVideo.launch(uri)
+            }
+        } else {
+            Toast.makeText(context, "Camera permission is needed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun launchCamera(kind: Int) {
+        if (context.checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            val uri = newCaptureUri(if (kind == 1) "jpg" else "mp4")
+            captureUri = uri
+            if (kind == 1) takePhoto.launch(uri) else recordVideo.launch(uri)
+        } else {
+            pendingCamera = kind
+            cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     fun toggleSelect(id: Long) {
         if (id in selected) selected.remove(id) else selected.add(id)
     }
@@ -278,336 +345,392 @@ fun ChatScreen(
         !selectedMessages[0].deleted && selectedMessages[0].kind == MessageKind.Text
     val canDeleteForEveryone = selectedMessages.isNotEmpty() && selectedMessages.all { it.sent && !it.deleted }
 
-    GlassScaffold(
-        imeAware = true,
-        wallpaper = Wallpapers.current,
-        topBar = {
-            AnimatedContent(
-                targetState = selecting,
-                transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
-                label = "topBar",
-            ) { isSelecting ->
-                if (isSelecting) {
-                    SelectionTopBar(count = selected.size, onClose = { selected.clear() })
-                } else {
-                    ChatHeader(
-                        contact = convo.contact,
-                        typing = typing,
-                        callExpanded = callExpanded,
-                        onBack = onBack,
-                        onCallTap = { callExpanded = true },
-                        onAudioCall = {
-                            callExpanded = false
-                            onCall(false)
-                        },
-                        onVideoCall = {
-                            callExpanded = false
-                            onCall(true)
-                        },
-                        onProfileTap = {
-                            if (callExpanded) callExpanded = false else onOpenProfile()
-                        },
-                        onMenu = {
-                            callExpanded = false
-                            showMenu = true
-                        },
-                    )
-                }
-            }
-        },
-        bottomBar = {
-            Column {
-                AnimatedVisibility(
-                    visible = bannerMessage != null && !selecting,
-                    enter = fadeIn(tween(160)) + expandVertically(spring(dampingRatio = 0.8f, stiffness = 400f)),
-                    exit = fadeOut(tween(120)) + shrinkVertically(),
-                ) {
-                    val banner = shownBanner
-                    if (banner != null) {
-                        ComposerBanner(
-                            icon = if (bannerKind == BannerKind.Edit) Icons.Outlined.Edit else Icons.AutoMirrored.Filled.Reply,
-                            title = if (bannerKind == BannerKind.Edit) "Edit message" else "Replying to ${if (banner.sent) "yourself" else convo.contact.name}",
-                            subtitle = banner.preview(),
-                            onClose = {
-                                if (editTarget != null) draft = ""
-                                editTarget = null
-                                replyTarget = null
-                            },
-                        )
-                    }
-                }
+    Box(modifier = Modifier.fillMaxSize()) {
+        GlassScaffold(
+            imeAware = true,
+            wallpaper = palette,
+            wallpaperUri = convo.wallpaperUri.ifEmpty { Wallpapers.customUri },
+            topBar = {
                 AnimatedContent(
                     targetState = selecting,
-                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
-                    label = "bottomBar",
+                    transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) },
+                    label = "topBar",
                 ) { isSelecting ->
                     if (isSelecting) {
-                        SelectionActionBar(
-                            canReply = canReply,
-                            canEdit = canEdit,
-                            onReply = {
-                                replyTarget = selectedMessages.firstOrNull()
-                                editTarget = null
-                                selected.clear()
-                            },
-                            onEdit = {
-                                editTarget = selectedMessages.firstOrNull()
-                                replyTarget = null
-                                selected.clear()
-                            },
-                            onForward = {
-                                val ids = selected.toList()
-                                selected.clear()
-                                onForward(ids)
-                            },
-                            onCopy = {
-                                val text = selectedMessages.joinToString("\n") { it.preview() }
-                                clipboard.setText(AnnotatedString(text))
-                                selected.clear()
-                            },
-                            onDelete = { showDelete = true },
-                        )
+                        SelectionTopBar(count = selected.size, onClose = { selected.clear() })
                     } else {
-                        MessageComposer(
-                            draft = draft,
-                            onDraftChange = { draft = it },
-                            isEditing = editTarget != null,
-                            onSend = { sendText(it) },
-                            onSendVoice = { duration, path ->
-                                val m = FakeChatStore.sendVoice(convo, duration, path)
-                                runDelivery(m.id)
+                        ChatHeader(
+                            contact = convo.contact,
+                            typing = typing,
+                            muted = convo.muted,
+                            callExpanded = callExpanded,
+                            onBack = onBack,
+                            onCallTap = { callExpanded = true },
+                            onAudioCall = {
+                                callExpanded = false
+                                onCall(false)
                             },
-                            onAttach = { showAttach = true },
+                            onVideoCall = {
+                                callExpanded = false
+                                onCall(true)
+                            },
+                            onProfileTap = {
+                                if (callExpanded) {
+                                    callExpanded = false
+                                } else {
+                                    onOpenProfile()
+                                }
+                            },
+                            onMenu = {
+                                callExpanded = false
+                                showMenu = true
+                            },
                         )
                     }
                 }
-            }
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState,
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = padding.calculateTopPadding() + 8.dp,
-                    bottom = padding.calculateBottomPadding() + 8.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item(key = "date") { DateChip("Today") }
-                items(convo.messages, key = { it.id }) { message ->
-                    MessageRow(
-                        message = message,
-                        animateIn = message.id > baselineId,
-                        selecting = selecting,
-                        selected = message.id in selected,
-                        onLongClick = {
-                            callExpanded = false
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (message.id !in selected) selected.add(message.id)
-                        },
-                        onClick = { if (selecting) toggleSelect(message.id) },
-                        onSwipeReply = {
-                            if (!message.deleted) {
-                                replyTarget = message
-                                editTarget = null
-                            }
-                        },
-                        onQuoteClick = { id ->
-                            val index = convo.messages.indexOfFirst { it.id == id }
-                            if (index >= 0) scope.launch { listState.animateScrollToItem(index + 1) }
-                        },
-                        onReact = { emoji -> FakeChatStore.toggleReaction(convo, message.id, emoji) },
-                        onOpenMedia = { item -> onOpenMedia(item.tone, item.isVideo) },
-                        onRetry = {
-                            FakeChatStore.setStatus(convo, message.id, MessageStatus.Sending)
-                            scope.launch {
-                                delay(500)
-                                FakeChatStore.setStatus(convo, message.id, MessageStatus.Sent)
-                            }
-                        },
+            },
+            bottomBar = {
+                Column {
+                    AnimatedVisibility(
+                        visible = bannerMessage != null && !selecting,
+                        enter = fadeIn(tween(160)) + expandVertically(spring(dampingRatio = 0.8f, stiffness = 400f)),
+                        exit = fadeOut(tween(120)) + shrinkVertically(),
+                    ) {
+                        val banner = shownBanner
+                        if (banner != null) {
+                            ComposerBanner(
+                                icon = if (bannerKind == BannerKind.Edit) Icons.Outlined.Edit else Icons.AutoMirrored.Filled.Reply,
+                                title = if (bannerKind == BannerKind.Edit) "Edit message" else "Replying to ${if (banner.sent) "yourself" else convo.contact.name}",
+                                subtitle = banner.preview(),
+                                onClose = {
+                                    if (editTarget != null) draft = ""
+                                    editTarget = null
+                                    replyTarget = null
+                                },
+                            )
+                        }
+                    }
+                    AnimatedContent(
+                        targetState = selecting,
+                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                        label = "bottomBar",
+                    ) { isSelecting ->
+                        if (isSelecting) {
+                            SelectionActionBar(
+                                canReply = canReply,
+                                canEdit = canEdit,
+                                onReply = {
+                                    replyTarget = selectedMessages.firstOrNull()
+                                    editTarget = null
+                                    selected.clear()
+                                },
+                                onEdit = {
+                                    editTarget = selectedMessages.firstOrNull()
+                                    replyTarget = null
+                                    selected.clear()
+                                },
+                                onForward = {
+                                    val ids = selected.toList()
+                                    selected.clear()
+                                    onForward(ids)
+                                },
+                                onCopy = {
+                                    val text = selectedMessages.joinToString("\n") { it.preview() }
+                                    clipboard.setText(AnnotatedString(text))
+                                    selected.clear()
+                                },
+                                onDelete = { showDelete = true },
+                            )
+                        } else {
+                            ChatComposer(
+                                draft = draft,
+                                onDraftChange = { draft = it },
+                                isEditing = editTarget != null,
+                                emojiOpen = emojiOpen,
+                                onEmojiOpenChange = { emojiOpen = it },
+                                onSend = { sendText(it) },
+                                onSendVoice = { duration, path ->
+                                    val m = FakeChatStore.sendVoice(convo, duration, path)
+                                    runDelivery(m.id)
+                                },
+                                onAttach = {
+                                    emojiOpen = false
+                                    showAttach = true
+                                },
+                            )
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = emojiOpen && !selecting,
+                        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 400f)) + fadeIn(tween(160)),
+                        exit = shrinkVertically() + fadeOut(tween(120)),
+                    ) {
+                        EmojiPanel(
+                            onPick = { emoji -> draft += emoji },
+                            onBackspace = { draft = draft.dropLastEmojiUnit() },
+                            height = 290.dp,
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = padding.calculateTopPadding() + 8.dp,
+                        bottom = padding.calculateBottomPadding() + 8.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    item(key = "date") { DateChip("Today") }
+                    items(convo.messages, key = { it.id }) { message ->
+                        if (message.kind == MessageKind.CallLog) {
+                            CallLogRow(message = message, onCallBack = { onCall(message.callVideo) })
+                        } else {
+                            MessageRow(
+                                message = message,
+                                animateIn = message.id > baselineId,
+                                selecting = selecting,
+                                selected = message.id in selected,
+                                onLongClick = {
+                                    callExpanded = false
+                                    emojiOpen = false
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    if (message.id !in selected) selected.add(message.id)
+                                },
+                                onClick = {
+                                    if (selecting) {
+                                        toggleSelect(message.id)
+                                    } else {
+                                        emojiOpen = false
+                                    }
+                                },
+                                onSwipeReply = {
+                                    if (!message.deleted) {
+                                        replyTarget = message
+                                        editTarget = null
+                                    }
+                                },
+                                onQuoteClick = { id ->
+                                    val index = convo.messages.indexOfFirst { it.id == id }
+                                    if (index >= 0) scope.launch { listState.animateScrollToItem(index + 1) }
+                                },
+                                onReact = { emoji -> FakeChatStore.toggleReaction(convo, message.id, emoji) },
+                                onOpenMedia = onOpenMedia,
+                                onRetry = {
+                                    FakeChatStore.setStatus(convo, message.id, MessageStatus.Sending)
+                                    FakeChatStore.simulateDelivery(convo, message.id, 800L)
+                                },
+                            )
+                        }
+                    }
+                    if (typing) {
+                        item(key = "typing") { TypingBubble() }
+                    }
+                }
+
+                // Any tap on the screen closes the expanded call buttons.
+                if (callExpanded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { callExpanded = false },
                     )
                 }
-                if (typing) {
-                    item(key = "typing") { TypingBubble() }
+
+                // Emoji row sits right next to the selected message (above it, or below it when there is no room).
+                val shownSpot = lastSpot
+                val pickerHeightPx = with(density) { 64.dp.toPx() }
+                val gapPx = with(density) { 6.dp.toPx() }
+                val topLimitPx = with(density) { padding.calculateTopPadding().toPx() }
+                AnimatedVisibility(
+                    visible = selected.size == 1 && shownSpot != null,
+                    modifier = Modifier
+                        .align(if (shownSpot?.sent == true) Alignment.TopEnd else Alignment.TopStart)
+                        .padding(horizontal = 12.dp)
+                        .offset {
+                            val s = shownSpot
+                            if (s == null) {
+                                IntOffset(0, 0)
+                            } else {
+                                val above = s.offset - pickerHeightPx - gapPx
+                                val y = if (above >= topLimitPx) above else s.offset + s.size + gapPx
+                                IntOffset(0, y.roundToInt())
+                            }
+                        },
+                    enter = scaleIn(animationSpec = spring(dampingRatio = 0.6f, stiffness = 420f), initialScale = 0.6f) + fadeIn(tween(160)),
+                    exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(120)),
+                ) {
+                    ReactionPicker(
+                        onPick = { emoji ->
+                            selected.firstOrNull()?.let { FakeChatStore.toggleReaction(convo, it, emoji) }
+                            selected.clear()
+                        },
+                        onMore = { showReactionSheet = true },
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = showJump && !selecting,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = padding.calculateBottomPadding() + 12.dp),
+                    enter = scaleIn(animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f) + fadeIn(),
+                    exit = scaleOut(targetScale = 0.4f) + fadeOut(),
+                ) {
+                    GlassCircleButton(
+                        icon = Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = "Latest messages",
+                        onClick = { scope.launch { listState.animateScrollToItem(itemCount - 1) } },
+                    )
                 }
             }
+        }
 
-            // Any tap on the screen closes the expanded call buttons.
-            if (callExpanded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { callExpanded = false },
-                )
-            }
+        // ================= Everything below is drawn ABOVE the message bar =================
 
-            // Emoji row sits right next to the selected message (above it, or below it when there is no room).
-            val shownSpot = lastSpot
-            val pickerHeightPx = with(density) { 64.dp.toPx() }
-            val gapPx = with(density) { 6.dp.toPx() }
-            val topLimitPx = with(density) { padding.calculateTopPadding().toPx() }
-            AnimatedVisibility(
-                visible = selected.size == 1 && shownSpot != null,
+        // Three-dot menu
+        AnimatedVisibility(visible = showMenu, enter = fadeIn(tween(160)), exit = fadeOut(tween(120))) {
+            Box(
                 modifier = Modifier
-                    .align(if (shownSpot?.sent == true) Alignment.TopEnd else Alignment.TopStart)
-                    .padding(horizontal = 12.dp)
-                    .offset {
-                        val s = shownSpot
-                        if (s == null) {
-                            IntOffset(0, 0)
-                        } else {
-                            val above = s.offset - pickerHeightPx - gapPx
-                            val y = if (above >= topLimitPx) above else s.offset + s.size + gapPx
-                            IntOffset(0, y.roundToInt())
-                        }
-                    },
-                enter = scaleIn(animationSpec = spring(dampingRatio = 0.6f, stiffness = 420f), initialScale = 0.6f) + fadeIn(tween(160)),
-                exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(120)),
-            ) {
-                ReactionPicker(
-                    onPick = { emoji ->
-                        selected.firstOrNull()?.let { FakeChatStore.toggleReaction(convo, it, emoji) }
-                        selected.clear()
-                    },
-                )
-            }
-
-            AnimatedVisibility(
-                visible = showJump && !selecting,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = padding.calculateBottomPadding() + 12.dp),
-                enter = scaleIn(animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f) + fadeIn(),
-                exit = scaleOut(targetScale = 0.4f) + fadeOut(),
-            ) {
-                GlassCircleButton(
-                    icon = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = "Latest messages",
-                    onClick = { scope.launch { listState.animateScrollToItem(itemCount - 1) } },
-                )
-            }
-
-            // Three-dot menu
-            AnimatedVisibility(
-                visible = showMenu,
-                enter = fadeIn(tween(160)),
-                exit = fadeOut(tween(120)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showMenu = false },
-                )
-            }
-            AnimatedVisibility(
-                visible = showMenu,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = padding.calculateTopPadding() + 4.dp, end = 16.dp),
-                enter = scaleIn(animationSpec = spring(dampingRatio = 0.65f, stiffness = 450f), initialScale = 0.7f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeIn(tween(140)),
-                exit = scaleOut(targetScale = 0.8f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)) + fadeOut(tween(100)),
-            ) {
-                GlassSurface(modifier = Modifier.width(240.dp), shape = RoundedCornerShape(24.dp), fillAlpha = 0.92f) {
-                    Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                        MenuRow(Icons.Outlined.Person, "View profile") { showMenu = false; onOpenProfile() }
-                        MenuRow(Icons.Outlined.Search, "Search") { showMenu = false; onOpenSearch() }
-                        MenuRow(Icons.Outlined.PhotoLibrary, "Media and files") { showMenu = false; onOpenSharedMedia() }
-                        MenuRow(
-                            icon = if (convo.muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff,
-                            label = if (convo.muted) "Unmute notifications" else "Mute notifications",
-                        ) { convo.muted = !convo.muted; showMenu = false }
-                        MenuRow(Icons.Outlined.Palette, "Wallpaper") { showMenu = false; onOpenWallpaper() }
-                        MenuRow(Icons.Outlined.Delete, "Clear chat") { showMenu = false; showClear = true }
-                        MenuRow(Icons.Outlined.Block, "Block", PayraColors.Danger) { showMenu = false; showBlock = true }
+                    .fillMaxSize()
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showMenu = false },
+            )
+        }
+        AnimatedVisibility(
+            visible = showMenu,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = statusTop + 64.dp, end = 16.dp),
+            enter = scaleIn(animationSpec = spring(dampingRatio = 0.65f, stiffness = 450f), initialScale = 0.7f, transformOrigin = TransformOrigin(1f, 0f)) + fadeIn(tween(140)),
+            exit = scaleOut(targetScale = 0.8f, transformOrigin = TransformOrigin(1f, 0f)) + fadeOut(tween(100)),
+        ) {
+            GlassSurface(modifier = Modifier.width(250.dp), shape = RoundedCornerShape(24.dp), fillAlpha = 0.94f) {
+                Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                    MenuRow(Icons.Outlined.Person, "View profile") { showMenu = false; onOpenProfile() }
+                    MenuRow(Icons.Outlined.Search, "Search") { showMenu = false; onOpenSearch() }
+                    MenuRow(Icons.Outlined.PhotoLibrary, "Media, files and links") { showMenu = false; onOpenSharedMedia() }
+                    MenuRow(
+                        icon = if (convo.muted) Icons.Outlined.Notifications else Icons.Outlined.NotificationsOff,
+                        label = if (convo.muted) "Unmute notifications" else "Mute notifications",
+                    ) {
+                        convo.muted = !convo.muted
+                        showMenu = false
+                        Toast.makeText(context, if (convo.muted) "Notifications muted" else "Notifications on", Toast.LENGTH_SHORT).show()
                     }
+                    MenuRow(Icons.Outlined.Palette, "Wallpaper") { showMenu = false; onOpenWallpaper() }
+                    MenuRow(Icons.Outlined.Delete, "Clear chat") { showMenu = false; showClear = true }
+                    MenuRow(Icons.Outlined.Block, "Block", PayraColors.Danger) { showMenu = false; showBlock = true }
                 }
             }
+        }
 
-            // Attachment sheet
-            BottomSheetOverlay(visible = showAttach, onDismiss = { showAttach = false }) {
-                fun send(make: () -> ChatMessage) {
+        // Attachment sheet
+        BottomSheetOverlay(visible = showAttach, onDismiss = { showAttach = false }) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                SheetOption(Icons.Outlined.Image, "Gallery", PayraColors.Primary, {
                     showAttach = false
-                    runDelivery(make().id)
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SheetOption(Icons.Outlined.Image, "Gallery", PayraColors.Primary, {
-                        showAttach = false
-                        onOpenPicker()
-                    })
-                    SheetOption(Icons.Outlined.CameraAlt, "Camera", Color(0xFF7B6FD6), {
-                        showAttach = false
-                        onOpenCamera()
-                    })
-                    SheetOption(Icons.Outlined.Videocam, "Video", Color(0xFFF28B66), {
-                        send { FakeChatStore.sendMedia(convo, listOf(MediaItem(5, true, "0:24"))) }
-                    })
-                }
-                Spacer(Modifier.size(20.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    SheetOption(Icons.Outlined.InsertDriveFile, "Document", Color(0xFF3FA796), {
-                        send { FakeChatStore.sendFile(convo, "Project_Plan.pdf", "2.4 MB  PDF") }
-                    })
-                    SheetOption(Icons.Outlined.Contacts, "Contact", Color(0xFFE4A93A), {
-                        send { FakeChatStore.sendContactCard(convo, "Nusrat", "+880 1XXX XXXXXX") }
-                    })
-                    SheetOption(Icons.Outlined.LocationOn, "Location", Color(0xFF2B8FAE), {
-                        send { FakeChatStore.sendLocation(convo, "Current location", "Dhaka, Bangladesh") }
-                    })
-                }
+                    onOpenPicker()
+                })
+                SheetOption(Icons.Outlined.CameraAlt, "Camera", Color(0xFF7B6FD6), {
+                    showAttach = false
+                    launchCamera(1)
+                })
+                SheetOption(Icons.Outlined.Videocam, "Video", Color(0xFFF28B66), {
+                    showAttach = false
+                    launchCamera(2)
+                })
             }
+            Spacer(Modifier.size(20.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                SheetOption(Icons.Outlined.InsertDriveFile, "Document", Color(0xFF3FA796), {
+                    showAttach = false
+                    pickDocument.launch(arrayOf("*/*"))
+                })
+                SheetOption(Icons.Outlined.Contacts, "Contact", Color(0xFFE4A93A), {
+                    showAttach = false
+                    onOpenContactPicker()
+                })
+                SheetOption(Icons.Outlined.LocationOn, "Location", Color(0xFF2B8FAE), {
+                    showAttach = false
+                    onOpenShareLocation()
+                })
+            }
+        }
 
-            // Delete sheet
-            BottomSheetOverlay(visible = showDelete, onDismiss = { showDelete = false }) {
-                Text("Delete message?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Choose how to delete this message.", color = PayraColors.Muted, fontSize = 14.sp)
-                Spacer(Modifier.size(14.dp))
-                if (canDeleteForEveryone) {
-                    SheetButton("Delete for everyone", PayraColors.Danger, onClick = {
-                        selectedMessages.forEach { FakeChatStore.deleteForEveryone(convo, it.id) }
-                        selected.clear()
-                        showDelete = false
-                    })
-                    Spacer(Modifier.size(10.dp))
-                }
-                SheetButton("Delete for me", PayraColors.Ink, onClick = {
-                    selectedMessages.forEach { FakeChatStore.deleteForMe(convo, it.id) }
+        // Delete sheet
+        BottomSheetOverlay(visible = showDelete, onDismiss = { showDelete = false }) {
+            Text("Delete message?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Choose how to delete this message.", color = PayraColors.Muted, fontSize = 14.sp)
+            Spacer(Modifier.size(14.dp))
+            if (canDeleteForEveryone) {
+                SheetButton("Delete for everyone", PayraColors.Danger, onClick = {
+                    selectedMessages.forEach { FakeChatStore.deleteForEveryone(convo, it.id) }
                     selected.clear()
                     showDelete = false
                 })
                 Spacer(Modifier.size(10.dp))
-                SheetButton("Cancel", PayraColors.Primary, onClick = { showDelete = false })
             }
-
-            // Clear chat sheet
-            BottomSheetOverlay(visible = showClear, onDismiss = { showClear = false }) {
-                Text("Clear this chat?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("All messages in this chat will be removed from your phone.", color = PayraColors.Muted, fontSize = 14.sp)
-                Spacer(Modifier.size(14.dp))
-                SheetButton("Clear chat", PayraColors.Danger, onClick = {
-                    FakeChatStore.clearChat(convo)
-                    showClear = false
-                })
-                Spacer(Modifier.size(10.dp))
-                SheetButton("Cancel", PayraColors.Primary, onClick = { showClear = false })
-            }
-
-            // Block sheet
-            BottomSheetOverlay(visible = showBlock, onDismiss = { showBlock = false }) {
-                Text("Block ${convo.contact.name}?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("They will not be able to message or call you.", color = PayraColors.Muted, fontSize = 14.sp)
-                Spacer(Modifier.size(14.dp))
-                SheetButton("Block", PayraColors.Danger, onClick = {
-                    FakeChatStore.block(convo.contact.id)
-                    showBlock = false
-                    onBack()
-                })
-                Spacer(Modifier.size(10.dp))
-                SheetButton("Cancel", PayraColors.Primary, onClick = { showBlock = false })
-            }
+            SheetButton("Delete for me", PayraColors.Ink, onClick = {
+                selectedMessages.forEach { FakeChatStore.deleteForMe(convo, it.id) }
+                selected.clear()
+                showDelete = false
+            })
+            Spacer(Modifier.size(10.dp))
+            SheetButton("Cancel", PayraColors.Primary, onClick = { showDelete = false })
         }
+
+        // Clear chat sheet
+        BottomSheetOverlay(visible = showClear, onDismiss = { showClear = false }) {
+            Text("Clear this chat?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("All messages in this chat will be removed from your phone.", color = PayraColors.Muted, fontSize = 14.sp)
+            Spacer(Modifier.size(14.dp))
+            SheetButton("Clear chat", PayraColors.Danger, onClick = {
+                FakeChatStore.clearChat(convo)
+                showClear = false
+            })
+            Spacer(Modifier.size(10.dp))
+            SheetButton("Cancel", PayraColors.Primary, onClick = { showClear = false })
+        }
+
+        // Block sheet
+        BottomSheetOverlay(visible = showBlock, onDismiss = { showBlock = false }) {
+            Text("Block ${convo.contact.name}?", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("They will not be able to message or call you.", color = PayraColors.Muted, fontSize = 14.sp)
+            Spacer(Modifier.size(14.dp))
+            SheetButton("Block", PayraColors.Danger, onClick = {
+                FakeChatStore.block(convo.contact.id)
+                showBlock = false
+                onBack()
+            })
+            Spacer(Modifier.size(10.dp))
+            SheetButton("Cancel", PayraColors.Primary, onClick = { showBlock = false })
+        }
+
+        // Full emoji list for reactions
+        BottomSheetOverlay(visible = showReactionSheet, onDismiss = { showReactionSheet = false }) {
+            Text("React with", color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.size(8.dp))
+            EmojiPanel(
+                onPick = { emoji ->
+                    selected.firstOrNull()?.let { FakeChatStore.toggleReaction(convo, it, emoji) }
+                    selected.clear()
+                    showReactionSheet = false
+                },
+                height = 330.dp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LazyItemScope.CallLogRow(message: ChatMessage, onCallBack: () -> Unit) {
+    Box(modifier = Modifier.animateItem().fillMaxWidth()) {
+        CallLogChip(message = message, onCallBack = onCallBack)
     }
 }
 
@@ -619,6 +742,7 @@ fun ChatScreen(
 private fun ChatHeader(
     contact: Contact,
     typing: Boolean,
+    muted: Boolean,
     callExpanded: Boolean,
     onBack: () -> Unit,
     onCallTap: () -> Unit,
@@ -644,17 +768,32 @@ private fun ChatHeader(
                 modifier = Modifier.padding(start = 8.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 40.dp)
+                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 40.dp, imageUri = contact.avatarUri)
                 Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        contact.name,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
-                        color = PayraColors.Ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            contact.name,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 17.sp,
+                            color = PayraColors.Ink,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        AnimatedVisibility(
+                            visible = muted,
+                            enter = scaleIn(spring(dampingRatio = 0.5f, stiffness = 500f), initialScale = 0.3f) + fadeIn(),
+                            exit = scaleOut(targetScale = 0.3f) + fadeOut(),
+                        ) {
+                            Icon(
+                                Icons.Outlined.NotificationsOff,
+                                contentDescription = "Muted",
+                                tint = PayraColors.Muted,
+                                modifier = Modifier.padding(start = 6.dp).size(16.dp),
+                            )
+                        }
+                    }
                     AnimatedContent(
                         targetState = typing,
                         transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
@@ -950,231 +1089,6 @@ private fun LazyItemScope.TypingBubble() {
                 color = PayraColors.Muted,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
             )
-        }
-    }
-}
-
-private fun formatDuration(totalSeconds: Int): String {
-    val m = totalSeconds / 60
-    val s = totalSeconds % 60
-    return "$m:${s.toString().padStart(2, '0')}"
-}
-
-/** Message bar: text, emoji and attach; becomes a recording bar when the mic is tapped (really records). */
-@Composable
-private fun MessageComposer(
-    draft: String,
-    onDraftChange: (String) -> Unit,
-    isEditing: Boolean,
-    onSend: (String) -> Unit,
-    onSendVoice: (String, String) -> Unit,
-    onAttach: () -> Unit,
-) {
-    val context = LocalContext.current
-    val recorder = remember { VoiceRecorder(context) }
-    var recording by remember { mutableStateOf(false) }
-    var seconds by remember { mutableIntStateOf(0) }
-
-    DisposableEffect(Unit) {
-        onDispose { recorder.cancel() }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted && recorder.start()) recording = true
-    }
-
-    fun startRecording() {
-        val granted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            if (recorder.start()) recording = true
-        } else {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
-    LaunchedEffect(recording) {
-        if (recording) {
-            seconds = 0
-            while (true) {
-                delay(1000)
-                seconds++
-            }
-        }
-    }
-
-    AnimatedContent(
-        targetState = recording,
-        transitionSpec = {
-            (fadeIn(tween(180)) + slideInVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) { h -> h / 3 }) togetherWith fadeOut(tween(120))
-        },
-        label = "composerMode",
-    ) { isRecording ->
-        if (isRecording) {
-            RecordingBar(
-                seconds = seconds,
-                onCancel = {
-                    recorder.cancel()
-                    recording = false
-                },
-                onSend = {
-                    val result = recorder.stop()
-                    recording = false
-                    if (result != null) onSendVoice(formatDuration(result.second), result.first)
-                },
-            )
-        } else {
-            TextBar(
-                draft = draft,
-                onDraftChange = onDraftChange,
-                isEditing = isEditing,
-                onSend = onSend,
-                onMic = { startRecording() },
-                onAttach = onAttach,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TextBar(
-    draft: String,
-    onDraftChange: (String) -> Unit,
-    isEditing: Boolean,
-    onSend: (String) -> Unit,
-    onMic: () -> Unit,
-    onAttach: () -> Unit,
-) {
-    val hasText = draft.isNotBlank()
-    val sendScale by animateFloatAsState(
-        targetValue = if (hasText) 1f else 0.92f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 450f),
-        label = "sendScale",
-    )
-
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GlassSurface(modifier = Modifier.weight(1f).animateContentSize(), shape = PayraShapes.Pill) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Outlined.EmojiEmotions, contentDescription = "Emoji", tint = PayraColors.Muted, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(12.dp))
-                Box(modifier = Modifier.weight(1f)) {
-                    if (draft.isEmpty()) {
-                        Text("Message", color = PayraColors.Muted, fontSize = 16.sp)
-                    }
-                    BasicTextField(
-                        value = draft,
-                        onValueChange = onDraftChange,
-                        maxLines = 4,
-                        textStyle = TextStyle(color = PayraColors.Ink, fontSize = 16.sp),
-                        cursorBrush = SolidColor(PayraColors.Primary),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Icon(
-                    Icons.Outlined.AttachFile,
-                    contentDescription = "Attach",
-                    tint = PayraColors.Muted,
-                    modifier = Modifier.size(24.dp).bouncyClick(onClick = onAttach, pressedScale = 0.8f),
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .graphicsLayer {
-                    scaleX = sendScale
-                    scaleY = sendScale
-                }
-                .bouncyClick(
-                    onClick = {
-                        val message = draft.trim()
-                        if (message.isNotEmpty()) onSend(message) else onMic()
-                    },
-                    pressedScale = 0.88f,
-                )
-                .clip(CircleShape)
-                .background(PayraColors.Primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            AnimatedContent(
-                targetState = hasText,
-                transitionSpec = {
-                    (fadeIn(tween(160)) + scaleIn(animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f), initialScale = 0.4f)) togetherWith
-                        (fadeOut(tween(100)) + scaleOut(targetScale = 0.4f))
-                },
-                label = "sendIcon",
-            ) { showSend ->
-                Icon(
-                    imageVector = if (showSend) (if (isEditing) Icons.Outlined.Check else Icons.AutoMirrored.Filled.Send) else Icons.Outlined.Mic,
-                    contentDescription = if (showSend) "Send" else "Voice message",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
-    }
-}
-
-/** Recording bar: pulsing red dot, timer, cancel and send. */
-@Composable
-private fun RecordingBar(seconds: Int, onCancel: () -> Unit, onSend: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "rec")
-    val pulse = transition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "recPulse",
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GlassSurface(modifier = Modifier.weight(1f), shape = PayraShapes.Pill) {
-            Row(
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .graphicsLayer {
-                            scaleX = pulse.value
-                            scaleY = pulse.value
-                        }
-                        .clip(CircleShape)
-                        .background(PayraColors.Danger),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(formatDuration(seconds), color = PayraColors.Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Text("Recording...", color = PayraColors.Muted, fontSize = 14.sp)
-                Spacer(Modifier.width(12.dp))
-                Icon(
-                    Icons.Outlined.Delete,
-                    contentDescription = "Cancel recording",
-                    tint = PayraColors.Danger,
-                    modifier = Modifier.size(22.dp).bouncyClick(onClick = onCancel, pressedScale = 0.8f),
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .bouncyClick(onClick = onSend, pressedScale = 0.88f)
-                .clip(CircleShape)
-                .background(PayraColors.Primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send voice message", tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }

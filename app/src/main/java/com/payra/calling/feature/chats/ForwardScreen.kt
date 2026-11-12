@@ -40,7 +40,8 @@ import androidx.compose.ui.unit.sp
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.preview
 import com.payra.calling.designsystem.AvatarCircle
-import com.payra.calling.designsystem.GlassPillField
+import com.payra.calling.designsystem.GlassSearchField
+import androidx.compose.runtime.setValue
 import com.payra.calling.designsystem.GlassScaffold
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.PayraColors
@@ -59,6 +60,8 @@ fun ForwardScreen(
 ) {
     val from = remember(fromContactId) { FakeChatStore.conversationFor(fromContactId) }
     val chosen = remember { mutableStateListOf<String>() }
+    var query by remember { androidx.compose.runtime.mutableStateOf("") }
+    val people = if (query.isBlank()) FakeChatStore.contacts.toList() else FakeChatStore.contacts.filter { it.name.contains(query, ignoreCase = true) }
     val firstPreview = remember(messageIds) {
         from.messages.firstOrNull { it.id == messageIds.firstOrNull() }?.preview().orEmpty()
     }
@@ -91,7 +94,7 @@ fun ForwardScreen(
         ) {
             item {
                 Column(modifier = Modifier.enterFromBottom(0)) {
-                    GlassPillField(placeholder = "Search chats", icon = Icons.Outlined.Search)
+                    GlassSearchField(value = query, onValueChange = { query = it }, placeholder = "Search chats")
                     Spacer(Modifier.height(12.dp))
                     GlassSurface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
                         Row(
@@ -132,7 +135,7 @@ fun ForwardScreen(
             item {
                 GlassSurface(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        FakeChatStore.contacts.forEachIndexed { index, contact ->
+                        people.forEachIndexed { index, contact ->
                             val isChosen = contact.id in chosen
                             val fill by animateColorAsState(
                                 targetValue = if (isChosen) PayraColors.Primary else Color.Transparent,

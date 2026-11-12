@@ -3,6 +3,11 @@ package com.payra.calling.data
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.graphics.Color
 import com.payra.calling.designsystem.PayraColors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,6 +28,7 @@ object FakeChatStore {
     val blocked = mutableStateListOf("tanvir")
 
     private var nextId = 1L
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var demoReplyIndex = 0
 
     private val demoReplies = listOf(
@@ -36,7 +42,27 @@ object FakeChatStore {
 
     private fun now(): String = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
 
-    fun contact(id: String): Contact = contacts.first { it.id == id }
+    fun contact(id: String): Contact = contacts.firstOrNull { it.id == id } ?: contacts.first()
+
+    /** The logged-in person (demo: the first contact). */
+    val me: Contact get() = contacts.first()
+
+    fun updateContact(id: String, transform: (Contact) -> Contact) {
+        val index = contacts.indexOfFirst { it.id == id }
+        if (index >= 0) contacts[index] = transform(contacts[index])
+    }
+
+    /** Status ticks move on (Sending -> Sent -> Delivered -> Read). [sendingMillis] = how long the upload spinner shows. */
+    fun simulateDelivery(conversation: Conversation, id: Long, sendingMillis: Long = 1800L) {
+        scope.launch {
+            delay(sendingMillis)
+            setStatus(conversation, id, MessageStatus.Sent)
+            delay(700)
+            setStatus(conversation, id, MessageStatus.Delivered)
+            delay(900)
+            setStatus(conversation, id, MessageStatus.Read)
+        }
+    }
 
     fun conversationFor(contactId: String): Conversation {
         val existing = conversations.firstOrNull { it.contact.id == contactId }
@@ -81,10 +107,24 @@ object FakeChatStore {
             ChatMessage(id, true, t, kind = MessageKind.Voice, voiceDuration = duration, audioPath = audioPath, status = MessageStatus.Sending)
         }
 
-    fun sendFile(conversation: Conversation, name: String, info: String): ChatMessage =
+    fun sendFile(conversation: Conversation, name: String, info: String, uri: String = ""): ChatMessage =
         addMessage(conversation) { id, t ->
-            ChatMessage(id, true, t, kind = MessageKind.File, fileName = name, fileInfo = info, status = MessageStatus.Sending)
+            ChatMessage(id, true, t, kind = MessageKind.File, fileName = name, fileInfo = info, fileUri = uri, status = MessageStatus.Sending)
         }
+
+    /** A line like "Voice call - 2:14" (or "Missed call") in the chat after a call. */
+    fun addCallLog(contactId: String, outgoing: Boolean, video: Boolean, missed: Boolean, seconds: Int) {
+        val conversation = conversationFor(contactId)
+        addMessage(conversation) { id, t ->
+            ChatMessage(
+                id, outgoing, t,
+                kind = MessageKind.CallLog,
+                voiceDuration = if (seconds > 0) "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}" else "",
+                callVideo = video,
+                callMissed = missed,
+            )
+        }
+    }
 
     fun sendLocation(conversation: Conversation, name: String, address: String): ChatMessage =
         addMessage(conversation) { id, t ->
@@ -111,6 +151,10 @@ object FakeChatStore {
 
     fun deleteForMe(conversation: Conversation, id: Long) {
         conversation.messages.removeAll { it.id == id }
+    }
+
+    fun unblock(contactId: String) {
+        blocked.remove(contactId)
     }
 
     fun clearChat(conversation: Conversation) {

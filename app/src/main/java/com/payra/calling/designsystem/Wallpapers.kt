@@ -2,6 +2,7 @@ package com.payra.calling.designsystem
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 
@@ -26,6 +27,9 @@ object Wallpapers {
 
     /** Index of the wallpaper used inside chats. */
     var selected by mutableIntStateOf(0)
+
+    /** A real photo used as the wallpaper of all chats (empty = none). */
+    var customUri by mutableStateOf("")
 
     val current: WallpaperPalette get() = all[selected]
 }

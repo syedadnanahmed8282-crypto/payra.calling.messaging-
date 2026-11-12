@@ -38,6 +38,7 @@ fun GlassScaffold(
     bottomBar: (@Composable () -> Unit)? = null,
     imeAware: Boolean = false,
     wallpaper: WallpaperPalette = Wallpapers.all[0],
+    wallpaperUri: String = "",
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val backdrop = rememberGlassBackdrop()
@@ -55,6 +56,10 @@ fun GlassScaffold(
             .then(if (imeAware) Modifier.imePadding() else Modifier),
     ) {
         GlowBackground(modifier = Modifier.glassSource(backdrop), palette = wallpaper) {
+            if (wallpaperUri.isNotEmpty()) {
+                PayraImage(model = wallpaperUri, modifier = Modifier.fillMaxSize())
+                Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.30f)))
+            }
             content(PaddingValues(top = topPad, bottom = bottomPad))
         }
 

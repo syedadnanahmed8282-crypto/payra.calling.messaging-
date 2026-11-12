@@ -1,6 +1,38 @@
 package com.payra.calling.feature.chats
 
+import android.content.Intent
 import android.media.MediaPlayer
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.animation.core.LinearEasing as LinearEase
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.graphics.graphicsLayer
+import com.payra.calling.data.DeviceData
+import com.payra.calling.data.findUrls
+import com.payra.calling.data.preview
+import com.payra.calling.designsystem.PayraImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -91,7 +123,9 @@ fun MediaTile(item: MediaItem, modifier: Modifier = Modifier, moreCount: Int = 0
             .clip(RoundedCornerShape(16.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        if (item.uri.isNotEmpty()) {
+            PayraImage(model = item.uri, modifier = Modifier.fillMaxSize())
+        } else Canvas(modifier = Modifier.fillMaxSize()) {
             drawRect(colors[0])
             drawCircle(
                 color = Color.White.copy(alpha = 0.75f),
@@ -293,11 +327,38 @@ private fun VoiceContent(duration: String, sent: Boolean, audioPath: String) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun FileContent(name: String, info: String, sent: Boolean) {
+private fun FileContent(name: String, info: String, sent: Boolean, fileUri: String) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val fg = if (sent) Color.White else PayraColors.Ink
     val sub = if (sent) Color.White.copy(alpha = 0.8f) else PayraColors.Muted
     val tile = if (sent) Color.White.copy(alpha = 0.2f) else PayraColors.Primary.copy(alpha = 0.12f)
     val tint = if (sent) Color.White else PayraColors.Primary
+    // 0 = not downloaded, 1 = downloading, 2 = saved
+    var state by remember { mutableIntStateOf(if (sent) 2 else 0) }
+    var savedPath by remember { mutableStateOf("") }
+    val progress = remember { Animatable(0f) }
+
+    fun download() {
+        if (state != 0) return
+        state = 1
+        scope.launch {
+            progress.snapTo(0f)
+            progress.animateTo(0.85f, tween(900, easing = LinearEasing))
+            val saved = withContext(Dispatchers.IO) {
+                if (fileUri.isNotEmpty()) DeviceData.saveToDownloads(context, Uri.parse(fileUri), name) else null
+            }
+            progress.animateTo(1f, tween(250))
+            savedPath = saved?.absolutePath.orEmpty()
+            state = 2
+            Toast.makeText(
+                context,
+                if (saved != null) "Saved: Android/data/${context.packageName}/files/Download" else "Saved",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(tile),
@@ -306,25 +367,93 @@ private fun FileContent(name: String, info: String, sent: Boolean) {
             Icon(Icons.Outlined.InsertDriveFile, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Column {
+        Column(modifier = Modifier.widthIn(max = 150.dp)) {
             Text(name, color = fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(info, color = sub, fontSize = 12.sp)
+            Text(info, color = sub, fontSize = 12.sp, maxLines = 1)
         }
         Spacer(Modifier.width(12.dp))
         Box(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(tile),
+            modifier = Modifier
+                .size(36.dp)
+                .bouncyClick(
+                    onClick = {
+                        if (state == 0) {
+                            download()
+                        } else if (state == 2 && savedPath.isNotEmpty()) {
+                            try {
+                                val file = java.io.File(savedPath)
+                                val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                                val mime = android.webkit.MimeTypeMap.getSingleton()
+                                    .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    pressedScale = 0.85f,
+                )
+                .clip(CircleShape)
+                .background(tile),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.FileDownload, contentDescription = "Download", tint = tint, modifier = Modifier.size(16.dp))
+            AnimatedContent(
+                targetState = state,
+                transitionSpec = { (fadeIn(tween(160)) + scaleIn(initialScale = 0.5f)) togetherWith (fadeOut(tween(100)) + scaleOut(targetScale = 0.5f)) },
+                label = "downloadState",
+            ) { st ->
+                when (st) {
+                    0 -> Icon(Icons.Outlined.FileDownload, contentDescription = "Download", tint = tint, modifier = Modifier.size(18.dp))
+                    1 -> Canvas(modifier = Modifier.size(24.dp)) {
+                        val strokeWidth = 3.dp.toPx()
+                        drawArc(
+                            color = tint.copy(alpha = 0.25f),
+                            startAngle = 0f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            style = Stroke(width = strokeWidth),
+                        )
+                        drawArc(
+                            color = tint,
+                            startAngle = -90f,
+                            sweepAngle = 360f * progress.value,
+                            useCenter = false,
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                        )
+                    }
+                    else -> Icon(Icons.Outlined.CheckCircle, contentDescription = "Saved", tint = tint, modifier = Modifier.size(20.dp))
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun LocationContent(name: String, address: String, sent: Boolean) {
+    val context = LocalContext.current
     val fg = if (sent) Color.White else PayraColors.Ink
     val sub = if (sent) Color.White.copy(alpha = 0.8f) else PayraColors.Muted
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = Modifier.bouncyClick(
+            onClick = {
+                try {
+                    val coords = Regex("(-?\\d+\\.\\d+)\\s*,\\s*(-?\\d+\\.\\d+)").find(address)
+                    val uri = if (coords != null) {
+                        Uri.parse("geo:${coords.groupValues[1]},${coords.groupValues[2]}?q=${coords.groupValues[1]},${coords.groupValues[2]}")
+                    } else {
+                        Uri.parse("geo:0,0?q=" + Uri.encode("$name $address"))
+                    }
+                    context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: Exception) {
+                    Toast.makeText(context, "No maps app found", Toast.LENGTH_SHORT).show()
+                }
+            },
+            pressedScale = 0.97f,
+        ),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Box(modifier = Modifier.size(width = 230.dp, height = 120.dp).clip(RoundedCornerShape(16.dp))) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawRect(Color(0xFFE3F1E8))
@@ -355,6 +484,7 @@ private fun LocationContent(name: String, address: String, sent: Boolean) {
 
 @Composable
 private fun ContactCardContent(name: String, phone: String, sent: Boolean) {
+    val context = LocalContext.current
     val fg = if (sent) Color.White else PayraColors.Ink
     val sub = if (sent) Color.White.copy(alpha = 0.8f) else PayraColors.Muted
     val chip = if (sent) Color.White.copy(alpha = 0.2f) else PayraColors.Primary.copy(alpha = 0.12f)
@@ -369,17 +499,120 @@ private fun ContactCardContent(name: String, phone: String, sent: Boolean) {
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Message", "Add contact").forEach { label ->
-                Text(
-                    text = label,
-                    color = chipText,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(chip)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+            Text(
+                text = "Add contact",
+                color = chipText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(chip)
+                    .bouncyClick(
+                        onClick = {
+                            try {
+                                val intent = Intent(android.provider.ContactsContract.Intents.Insert.ACTION).apply {
+                                    type = android.provider.ContactsContract.RawContacts.CONTENT_TYPE
+                                    putExtra(android.provider.ContactsContract.Intents.Insert.NAME, name)
+                                    putExtra(android.provider.ContactsContract.Intents.Insert.PHONE, phone)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No contacts app found", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        pressedScale = 0.92f,
+                    )
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+            Text(
+                text = "Call",
+                color = chipText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(chip)
+                    .bouncyClick(
+                        onClick = {
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(phone))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "No phone app found", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        pressedScale = 0.92f,
+                    )
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** Spinner on top of a picture / file while it is being sent. */
+@Composable
+private fun UploadOverlay(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "upload")
+    val angle = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEase), RepeatMode.Restart),
+        label = "uploadAngle",
+    )
+    Box(
+        modifier = modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.38f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Canvas(modifier = Modifier.size(44.dp)) {
+                val strokeWidth = 4.dp.toPx()
+                drawArc(
+                    color = Color.White.copy(alpha = 0.3f),
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(width = strokeWidth),
                 )
+                drawArc(
+                    color = Color.White,
+                    startAngle = angle.value,
+                    sweepAngle = 90f,
+                    useCenter = false,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text("Sending...", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** A call line in the chat ("Voice call - 2:14", "Missed video call") shown in the middle of the chat. */
+@Composable
+fun CallLogChip(message: ChatMessage, onCallBack: () -> Unit) {
+    val missed = message.callMissed
+    val tint = if (missed) PayraColors.Danger else PayraColors.Primary
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        GlassSurface(shape = RoundedCornerShape(22.dp), fillAlpha = 0.6f, onClick = onCallBack) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = if (message.callVideo) Icons.Outlined.Videocam else Icons.Outlined.Call,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = message.preview() + if (message.voiceDuration.isNotEmpty()) " · ${message.voiceDuration}" else "",
+                    color = tint,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(message.time, color = PayraColors.Muted, fontSize = 11.sp)
             }
         }
     }
@@ -438,6 +671,38 @@ fun StatusTicks(status: MessageStatus) {
     }
 }
 
+/** Text where web links are underlined and open in the browser when tapped. */
+@Composable
+private fun LinkedText(text: String, color: Color, sent: Boolean) {
+    val urls = remember(text) { text.findUrls() }
+    if (urls.isEmpty()) {
+        Text(text, color = color, fontSize = 15.sp)
+        return
+    }
+    val linkColor = if (sent) Color.White else PayraColors.Primary
+    val annotated = remember(text, linkColor) {
+        buildAnnotatedString {
+            var cursor = 0
+            urls.forEach { url ->
+                val start = text.indexOf(url, cursor)
+                if (start >= 0) {
+                    append(text.substring(cursor, start))
+                    val target = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
+                    withLink(
+                        LinkAnnotation.Url(
+                            target,
+                            TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)),
+                        ),
+                    ) { append(url) }
+                    cursor = start + url.length
+                }
+            }
+            append(text.substring(cursor))
+        }
+    }
+    Text(annotated, color = color, fontSize = 15.sp)
+}
+
 /** Everything inside a bubble: forwarded label, quote, content, caption, footer (edited, time, ticks). */
 @Composable
 fun BubbleBody(
@@ -470,17 +735,21 @@ fun BubbleBody(
                 QuoteBlock(reply = reply, sent = sent, onClick = { onQuoteClick(reply.messageId) })
             }
             when (message.kind) {
-                MessageKind.Text -> Text(message.text, color = fg, fontSize = 15.sp)
+                MessageKind.Text -> LinkedText(message.text, fg, sent)
                 MessageKind.Image, MessageKind.Video -> {
-                    MediaGrid(message.media, onOpen = onOpenMedia)
+                    Box {
+                        MediaGrid(message.media, onOpen = onOpenMedia)
+                        if (sent && message.status == MessageStatus.Sending) UploadOverlay(Modifier.matchParentSize())
+                    }
                     if (message.text.isNotBlank()) {
                         Text(message.text, color = fg, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
                 MessageKind.Voice -> VoiceContent(message.voiceDuration, sent, message.audioPath)
-                MessageKind.File -> FileContent(message.fileName, message.fileInfo, sent)
+                MessageKind.File -> FileContent(message.fileName, message.fileInfo, sent, message.fileUri)
                 MessageKind.Location -> LocationContent(message.placeName, message.placeAddress, sent)
                 MessageKind.ContactCard -> ContactCardContent(message.contactName, message.contactPhone, sent)
+                MessageKind.CallLog -> Unit
             }
         }
 

@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.designsystem.AvatarCircle
-import com.payra.calling.designsystem.GlassPillField
+import com.payra.calling.designsystem.GlassSearchField
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.PayraColors
 import com.payra.calling.designsystem.bouncyClick
@@ -42,6 +44,9 @@ fun ContactsScreen(
     onViewProfile: (String) -> Unit,
     onNewContact: () -> Unit = {},
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var query by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val people = if (query.isBlank()) FakeChatStore.contacts.toList() else FakeChatStore.contacts.filter { it.name.contains(query, ignoreCase = true) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -51,14 +56,14 @@ fun ContactsScreen(
         Spacer(Modifier.height(8.dp))
         Text("Contacts", style = MaterialTheme.typography.displayLarge, color = PayraColors.Ink, modifier = Modifier.enterFromBottom(0))
         Spacer(Modifier.height(16.dp))
-        GlassPillField(placeholder = "Search contacts", icon = Icons.Outlined.Search, modifier = Modifier.enterFromBottom(1))
+        GlassSearchField(value = query, onValueChange = { query = it }, placeholder = "Search contacts", modifier = Modifier.enterFromBottom(1))
         Spacer(Modifier.height(12.dp))
 
         GlassSurface(modifier = Modifier.fillMaxWidth().enterFromBottom(2)) {
             Column {
                 listOf(
                     Triple("New contact", Icons.Outlined.PersonAdd, onNewContact),
-                    Triple("Invite friends", Icons.Outlined.Share, {}),
+                    Triple("Invite friends", Icons.Outlined.Share, { com.payra.calling.designsystem.shareInvite(context) }),
                 ).forEach { (label, icon, action) ->
                     Row(
                         modifier = Modifier.fillMaxWidth().bouncyClick(onClick = action, pressedScale = 0.97f).padding(16.dp),
@@ -84,7 +89,7 @@ fun ContactsScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = contentPadding.calculateBottomPadding() + 8.dp),
             ) {
-                itemsIndexed(FakeChatStore.contacts, key = { _, c -> c.id }) { index, contact ->
+                itemsIndexed(people, key = { _, c -> c.id }) { index, contact ->
                     Row(
                         modifier = Modifier
                             .enterFromBottom(index + 4)

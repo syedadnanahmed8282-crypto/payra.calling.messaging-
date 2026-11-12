@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.sp
 import com.payra.calling.data.Contact
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.designsystem.AvatarCircle
-import com.payra.calling.designsystem.GlassPillField
+import com.payra.calling.designsystem.GlassSearchField
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.GlowBackground
 import com.payra.calling.designsystem.PayraColors
@@ -42,7 +44,10 @@ import com.payra.calling.designsystem.enterFromBottom
 
 /** Figma screen "36 New Chat". */
 @Composable
-fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit) {
+fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, onNewContact: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var query by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    val people = if (query.isBlank()) FakeChatStore.contacts.toList() else FakeChatStore.contacts.filter { it.name.contains(query, ignoreCase = true) }
     GlowBackground {
         Column(
             modifier = Modifier
@@ -53,17 +58,18 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit) {
         ) {
             ScreenHeader(title = "New chat", onBack = onBack, modifier = Modifier.enterFromBottom(0, distance = 12.dp))
             Spacer(Modifier.height(16.dp))
-            GlassPillField(
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it },
                 placeholder = "Search name or number",
-                icon = Icons.Outlined.Search,
                 modifier = Modifier.enterFromBottom(1),
             )
             Spacer(Modifier.height(16.dp))
 
             GlassSurface(modifier = Modifier.fillMaxWidth().enterFromBottom(2)) {
                 Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
-                    ActionRow(Icons.Outlined.PersonAdd, "New contact")
-                    ActionRow(Icons.Outlined.Share, "Invite friends")
+                    ActionRow(Icons.Outlined.PersonAdd, "New contact", onNewContact)
+                    ActionRow(Icons.Outlined.Share, "Invite friends") { com.payra.calling.designsystem.shareInvite(context) }
                 }
             }
 
@@ -77,7 +83,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit) {
             )
             GlassSurface(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(8.dp)) {
-                    FakeChatStore.contacts.forEachIndexed { index, contact ->
+                    people.forEachIndexed { index, contact ->
                         ContactRow(
                             contact = contact,
                             onClick = { onOpenChat(contact.id) },
@@ -92,11 +98,11 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit) {
 }
 
 @Composable
-private fun ActionRow(icon: ImageVector, label: String) {
+private fun ActionRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .bouncyClick(onClick = {}, pressedScale = 0.97f)
+            .bouncyClick(onClick = onClick, pressedScale = 0.97f)
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

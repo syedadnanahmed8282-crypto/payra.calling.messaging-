@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.payra.calling.data.UiPrefs
 
 /**
  * Soft glows behind the glass (the "liquid glass" backdrop). The glows drift very slowly.
@@ -26,7 +27,7 @@ fun GlowBackground(
     modifier: Modifier = Modifier,
     palette: WallpaperPalette = Wallpapers.all[0],
     base: Color = palette.base,
-    animated: Boolean = true,
+    animated: Boolean = !UiPrefs.reduceEffects,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val transition = rememberInfiniteTransition(label = "glowDrift")

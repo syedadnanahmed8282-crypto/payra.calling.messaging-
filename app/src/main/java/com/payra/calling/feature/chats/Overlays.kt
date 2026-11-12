@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -64,7 +65,7 @@ val ReactionEmojis = listOf(
 
 /** Figma "66 Reaction Picker": quick emoji row. Each emoji pops in one after the other. */
 @Composable
-fun ReactionPicker(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ReactionPicker(onPick: (String) -> Unit, modifier: Modifier = Modifier, onMore: (() -> Unit)? = null) {
     GlassSurface(modifier = modifier.widthIn(max = 330.dp), shape = RoundedCornerShape(30.dp), fillAlpha = 0.9f) {
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -80,6 +81,18 @@ fun ReactionPicker(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
                         .bouncyClick(onClick = { onPick(emoji) }, pressedScale = 0.75f)
                         .padding(horizontal = 4.dp),
                 )
+            }
+            if (onMore != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .bouncyClick(onClick = onMore, pressedScale = 0.8f)
+                        .clip(CircleShape)
+                        .background(PayraColors.Primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = "More emojis", tint = PayraColors.Primary, modifier = Modifier.size(20.dp))
+                }
             }
         }
     }
