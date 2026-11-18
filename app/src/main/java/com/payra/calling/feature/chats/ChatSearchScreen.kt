@@ -88,6 +88,7 @@ fun ChatSearchScreen(contactId: String, onBack: () -> Unit) {
                                     initial = if (message.sent) "Y" else convo.contact.name.take(1),
                                     color = if (message.sent) PayraColors.Primary else convo.contact.color,
                                     size = 44.dp,
+                                    imageUri = if (message.sent) FakeChatStore.me.avatarUri else convo.contact.avatarUri,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {

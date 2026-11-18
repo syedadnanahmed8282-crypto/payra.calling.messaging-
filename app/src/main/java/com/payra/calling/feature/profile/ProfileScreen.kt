@@ -76,6 +76,11 @@ import com.payra.calling.designsystem.GlassCircleButton
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.PayraColors
 import com.payra.calling.designsystem.PayraImage
+import com.payra.calling.designsystem.PayraImageLoader
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.ContentScale
 import com.payra.calling.designsystem.bouncyClick
 import com.payra.calling.designsystem.enterFromBottom
 import com.payra.calling.designsystem.popIn
@@ -140,6 +145,7 @@ fun ProfileScreen(
                     )
                 },
         ) {
+            ProfileBackdrop(uri = contact.coverUri.ifEmpty { contact.avatarUri }, accent = accent)
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 // Cover: crisp picture with soft bottom corners (tap to see it full screen)
                 Box(
@@ -448,5 +454,40 @@ private fun ActionCircle(icon: ImageVector, label: String, tint: Color, onClick:
             Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.align(Alignment.Center).size(24.dp))
         }
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)
+    }
+}
+
+
+/**
+ * Soft blurred background made from the cover picture (or the profile photo): a tiny copy of the picture stretched
+ * over the whole screen gives a smooth blur on every Android version, then a gentle wash keeps the text readable.
+ */
+@Composable
+private fun ProfileBackdrop(uri: String, accent: Color) {
+    if (uri.isEmpty()) return
+    val context = LocalContext.current
+    val request = remember(uri) { ImageRequest.Builder(context).data(uri).size(28).crossfade(true).build() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        AsyncImage(
+            model = request,
+            imageLoader = PayraImageLoader.get(context),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            filterQuality = FilterQuality.Medium,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            accent.copy(alpha = 0.18f),
+                            PayraColors.Background.copy(alpha = 0.58f),
+                            PayraColors.Background.copy(alpha = 0.80f),
+                        ),
+                    ),
+                ),
+        )
     }
 }

@@ -59,7 +59,7 @@ fun ArchivedChatsScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit) {
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                AvatarCircle(initial = convo.contact.name.take(1), color = convo.contact.color, size = 52.dp)
+                                AvatarCircle(initial = convo.contact.name.take(1), color = convo.contact.color, size = 52.dp, imageUri = convo.contact.avatarUri, blocked = com.payra.calling.data.FakeChatStore.isBlocked(convo.contact.id))
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(convo.contact.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)

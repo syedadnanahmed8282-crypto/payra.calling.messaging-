@@ -133,7 +133,7 @@ private fun ContactRow(contact: Contact, onClick: () -> Unit, modifier: Modifier
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 48.dp)
+        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 48.dp, imageUri = contact.avatarUri, blocked = com.payra.calling.data.FakeChatStore.isBlocked(contact.id))
         Spacer(Modifier.width(12.dp))
         Column {
             Text(contact.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)

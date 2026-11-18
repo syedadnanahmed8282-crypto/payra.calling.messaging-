@@ -134,7 +134,7 @@ fun EditProfileScreen(contactId: String, onBack: () -> Unit, onCrop: (kind: Stri
                         size = 100.dp,
                         imageUri = contact.avatarUri,
                         modifier = Modifier
-                            .border(4.dp, PayraColors.Background, CircleShape)
+                            .border(4.dp, PayraColors.Background, RoundedCornerShape(22.dp))
                             .bouncyClick(onClick = { pickAvatar.launch(imageOnly) }, pressedScale = 0.95f),
                     )
                     Box(

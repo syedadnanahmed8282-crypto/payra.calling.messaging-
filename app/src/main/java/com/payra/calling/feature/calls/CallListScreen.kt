@@ -118,7 +118,7 @@ fun CallListScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 52.dp)
+                        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 52.dp, imageUri = contact.avatarUri, blocked = com.payra.calling.data.FakeChatStore.isBlocked(contact.id))
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(contact.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)

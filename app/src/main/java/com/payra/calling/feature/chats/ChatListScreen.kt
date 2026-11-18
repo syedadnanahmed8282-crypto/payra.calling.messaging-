@@ -166,7 +166,7 @@ fun ChatListScreen(
                 val target = sheetConvo
                 if (target != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AvatarCircle(initial = target.contact.name.take(1), color = target.contact.color, size = 44.dp)
+                        AvatarCircle(initial = target.contact.name.take(1), color = target.contact.color, size = 44.dp, imageUri = target.contact.avatarUri, blocked = com.payra.calling.data.FakeChatStore.isBlocked(target.contact.id))
                         Spacer(Modifier.width(12.dp))
                         Text(target.contact.name, color = PayraColors.Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }

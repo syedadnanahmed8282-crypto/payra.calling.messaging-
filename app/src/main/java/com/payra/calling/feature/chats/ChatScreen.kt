@@ -797,24 +797,25 @@ private fun ChatHeader(
     )
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlassCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBack)
-        Spacer(Modifier.width(8.dp))
+        GlassCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBack, size = 44.dp)
+        Spacer(Modifier.width(6.dp))
+        // Thin bar: exactly as tall as the profile photo (40 dp) plus a hair of padding
         GlassSurface(modifier = Modifier.weight(1f), shape = PayraShapes.Pill, onClick = onProfileTap) {
             Row(
-                modifier = Modifier.padding(start = 8.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 3.dp, end = 12.dp, top = 3.dp, bottom = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 40.dp, imageUri = contact.avatarUri, blocked = blocked)
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             contact.name,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             color = PayraColors.Ink,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -829,13 +830,13 @@ private fun ChatHeader(
                                 Icons.Outlined.NotificationsOff,
                                 contentDescription = "Muted",
                                 tint = PayraColors.Muted,
-                                modifier = Modifier.padding(start = 6.dp).size(16.dp),
+                                modifier = Modifier.padding(start = 5.dp).size(14.dp),
                             )
                         }
                     }
                     if (blocked) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Block, contentDescription = null, tint = PayraColors.Danger, modifier = Modifier.size(13.dp))
+                            Icon(Icons.Outlined.Block, contentDescription = null, tint = PayraColors.Danger, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Blocked", fontSize = 12.sp, color = PayraColors.Danger, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
@@ -860,55 +861,56 @@ private fun ChatHeader(
                 }
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
+        // Call pill: same height as the profile bar, bigger icons (all the same size, 40 dp touch area)
         GlassSurface(
             modifier = Modifier.animateContentSize(spring(dampingRatio = 0.72f, stiffness = 360f)),
             shape = PayraShapes.Pill,
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     modifier = Modifier
                         .graphicsLayer { alpha = if (blocked) 0.4f else 1f }
                         .clip(RoundedCornerShape(22.dp))
-                        .background(capsuleColor)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        .background(capsuleColor),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Outlined.Call,
-                        contentDescription = "Voice call",
+                    HeaderIcon(
+                        icon = Icons.Outlined.Call,
+                        description = "Voice call",
                         tint = if (callExpanded) PayraColors.Primary else PayraColors.Ink,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .bouncyClick(onClick = if (callExpanded) onAudioCall else onCallTap, pressedScale = 0.78f),
+                        onClick = if (callExpanded) onAudioCall else onCallTap,
                     )
                     AnimatedVisibility(
                         visible = callExpanded,
                         enter = fadeIn(tween(220)) + scaleIn(spring(dampingRatio = 0.55f, stiffness = 450f), initialScale = 0.3f) + expandHorizontally(),
                         exit = fadeOut(tween(120)) + scaleOut(targetScale = 0.3f) + shrinkHorizontally(),
                     ) {
-                        Icon(
-                            Icons.Outlined.Videocam,
-                            contentDescription = "Video call",
+                        HeaderIcon(
+                            icon = Icons.Outlined.Videocam,
+                            description = "Video call",
                             tint = PayraColors.Primary,
-                            modifier = Modifier.size(22.dp).bouncyClick(onClick = onVideoCall, pressedScale = 0.78f),
+                            onClick = onVideoCall,
                         )
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                Icon(
-                    Icons.Outlined.MoreVert,
-                    contentDescription = "More",
-                    tint = PayraColors.Ink,
-                    modifier = Modifier.size(22.dp).bouncyClick(onClick = onMenu, pressedScale = 0.78f),
-                )
-                Spacer(Modifier.width(4.dp))
+                HeaderIcon(icon = Icons.Outlined.MoreVert, description = "More", tint = PayraColors.Ink, onClick = onMenu)
             }
         }
+    }
+}
+
+/** One header icon: 26 dp picture inside a 40 dp touch area (voice, video and menu icons are all the same size). */
+@Composable
+private fun HeaderIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, tint: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(40.dp).bouncyClick(onClick = onClick, pressedScale = 0.82f),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(26.dp))
     }
 }
 

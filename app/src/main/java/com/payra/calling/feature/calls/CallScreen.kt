@@ -24,6 +24,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,7 +50,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FlipCameraAndroid
 import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.MicOff
-import androidx.compose.material.icons.outlined.PictureInPictureAlt
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.VideocamOff
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -58,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +74,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -377,8 +380,9 @@ private fun ActiveCallLayout(
             ) {
                 if (!CallManager.isFinished) {
                     GlassCircleButton(
-                        icon = Icons.Outlined.PictureInPictureAlt,
+                        icon = Icons.Outlined.KeyboardArrowDown,
                         contentDescription = "Minimize call",
+                        size = 44.dp,
                         onClick = {
                             CallManager.minimized = true
                             onMinimize()
@@ -503,6 +507,7 @@ private fun PulsingAvatar(initial: String, color: Color, imageUri: String, ringi
             color = color,
             size = 130.dp,
             imageUri = imageUri,
+            round = true,
             modifier = Modifier.border(4.dp, Color.White.copy(alpha = 0.5f), CircleShape),
         )
     }
@@ -536,17 +541,36 @@ private fun VideoStage(
     val margin = 16.dp
     val smallTop = 96.dp
 
+    // The small picture can be dragged anywhere, but never out of the screen.
+    val density = LocalDensity.current
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    val baseX = maxW - smallW - margin
+    val minDragX = with(density) { (-baseX).toPx() }
+    val maxDragX = with(density) { (maxW - smallW - baseX).toPx() }
+    val minDragY = with(density) { (-smallTop).toPx() }
+    val maxDragY = with(density) { (maxH - smallH - smallTop).toPx() }
+    val smallX = (baseX + with(density) { dragX.toDp() }).coerceIn(0.dp, (maxW - smallW).coerceAtLeast(0.dp))
+    val smallY = (smallTop + with(density) { dragY.toDp() }).coerceIn(0.dp, (maxH - smallH).coerceAtLeast(0.dp))
+    val dragModifier = Modifier.pointerInput(maxW, maxH) {
+        detectDragGestures { change, amount ->
+            change.consume()
+            dragX = (dragX + amount.x).coerceIn(minDragX, maxDragX)
+            dragY = (dragY + amount.y).coerceIn(minDragY, maxDragY)
+        }
+    }
+
     // Remote: small -> big as p goes 0 -> 1.  Self: big -> small as p goes 0 -> 1.
     val remoteW = lerpDp(smallW, maxW, p)
     val remoteH = lerpDp(smallH, maxH, p)
-    val remoteX = lerpDp(maxW - smallW - margin, 0.dp, p)
-    val remoteY = lerpDp(smallTop, 0.dp, p)
+    val remoteX = lerpDp(smallX, 0.dp, p)
+    val remoteY = lerpDp(smallY, 0.dp, p)
     val remoteCorner = lerpDp(24.dp, 0.dp, p)
 
     val selfW = lerpDp(maxW, smallW, p)
     val selfH = lerpDp(maxH, smallH, p)
-    val selfX = lerpDp(0.dp, maxW - smallW - margin, p)
-    val selfY = lerpDp(0.dp, smallTop, p)
+    val selfX = lerpDp(0.dp, smallX, p)
+    val selfY = lerpDp(0.dp, smallY, p)
     val selfCorner = lerpDp(0.dp, 24.dp, p)
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -561,7 +585,7 @@ private fun VideoStage(
                 .background(Brush.verticalGradient(listOf(Color(0xFF2B8FAE), Color(0xFF14566B))))
                 .then(
                     if (!remoteBig && connected) {
-                        Modifier.bouncyClick(onClick = { CallManager.swapped = !CallManager.swapped }, pressedScale = 0.95f)
+                        Modifier.bouncyClick(onClick = { CallManager.swapped = !CallManager.swapped }, pressedScale = 0.95f).then(dragModifier)
                     } else {
                         Modifier
                     },
@@ -584,6 +608,7 @@ private fun VideoStage(
                         Modifier
                             .border(2.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(selfCorner))
                             .bouncyClick(onClick = { CallManager.swapped = !CallManager.swapped }, pressedScale = 0.95f)
+                            .then(dragModifier)
                     } else {
                         Modifier
                     },

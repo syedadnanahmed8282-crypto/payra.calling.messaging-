@@ -69,10 +69,11 @@ fun AvatarCircle(
     modifier: Modifier = Modifier,
     imageUri: String = "",
     blocked: Boolean = false,
+    round: Boolean = false,
 ) {
     Box(modifier = modifier.size(size)) {
     Box(
-        modifier = Modifier.size(size).clip(CircleShape).background(color).then(if (blocked) Modifier.graphicsLayer { alpha = 0.45f } else Modifier),
+        modifier = Modifier.size(size).clip(if (round) CircleShape else RoundedCornerShape((size.value * 0.22f).dp)).background(color).then(if (blocked) Modifier.graphicsLayer { alpha = 0.45f } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (imageUri.isNotEmpty()) {

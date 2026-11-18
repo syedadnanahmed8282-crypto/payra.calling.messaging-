@@ -202,7 +202,7 @@ fun ChatComposer(
     )
 
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.weight(1f)) {
@@ -268,7 +268,7 @@ fun ChatComposer(
 
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(46.dp)
                     .graphicsLayer {
                         scaleX = micScale
                         scaleY = micScale
@@ -352,7 +352,7 @@ private fun TextPill(
 
     GlassSurface(modifier = Modifier.fillMaxWidth().animateContentSize(), shape = PayraShapes.Pill) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AnimatedContent(
@@ -429,7 +429,7 @@ private fun HoldingPill(seconds: Int, cancelProgress: Float) {
     )
     GlassSurface(modifier = Modifier.fillMaxWidth(), shape = PayraShapes.Pill) {
         Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp),
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -477,7 +477,7 @@ private fun LockedPill(
     )
     GlassSurface(modifier = Modifier.fillMaxWidth(), shape = PayraShapes.Pill) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(

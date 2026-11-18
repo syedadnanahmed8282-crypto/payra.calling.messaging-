@@ -156,7 +156,7 @@ fun ForwardScreen(
                                     .padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 48.dp)
+                                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 48.dp, imageUri = contact.avatarUri, blocked = com.payra.calling.data.FakeChatStore.isBlocked(contact.id))
                                 Spacer(Modifier.width(12.dp))
                                 Text(
                                     text = contact.name,
