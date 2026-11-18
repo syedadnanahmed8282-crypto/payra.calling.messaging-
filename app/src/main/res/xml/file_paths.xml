@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <cache-path name="captures" path="captures/" />
-    <external-cache-path name="external_cache" path="." />
+    <!-- user content (camera photos / videos, voice notes) -->
+    <files-path name="captures" path="captures/" />
+    <files-path name="voice" path="voice/" />
+    <!-- saved downloads (phones older than Android 10) -->
     <external-files-path name="downloads" path="Download/" />
+    <!-- real temporary files only -->
+    <cache-path name="cache_tmp" path="." />
+    <external-cache-path name="external_cache" path="." />
 </paths>

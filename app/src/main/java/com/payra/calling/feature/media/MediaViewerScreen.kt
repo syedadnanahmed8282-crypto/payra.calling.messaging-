@@ -69,7 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.payra.calling.data.DeviceData
-import com.payra.calling.data.MediaViewerHolder
+import com.payra.calling.data.MediaItem
 import com.payra.calling.designsystem.GlassCircleButton
 import com.payra.calling.designsystem.GlassSurface
 import com.payra.calling.designsystem.PayraColors
@@ -96,11 +96,17 @@ private fun clock(ms: Int): String {
  * Videos: real playback with play / pause and a seek bar. Download saves a copy into the app's Download folder.
  */
 @Composable
-fun MediaViewerScreen(onBack: () -> Unit) {
+fun MediaViewerScreen(
+    uri: String,
+    isVideo: Boolean,
+    duration: String,
+    tone: Int,
+    title: String,
+    onBack: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val item = remember { MediaViewerHolder.item }
-    val isVideo = item.isVideo
+    val item = remember(uri, isVideo, duration, tone) { MediaItem(tone, isVideo, duration, uri) }
     val real = item.uri.isNotEmpty()
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -164,22 +170,30 @@ fun MediaViewerScreen(onBack: () -> Unit) {
 
     fun download() {
         if (downloadState != 0) return
+        if (!real) {
+            Toast.makeText(context, "This is a demo picture, there is nothing to save", Toast.LENGTH_SHORT).show()
+            return
+        }
         downloadState = 1
         scope.launch {
             downloadProgress.snapTo(0f)
             downloadProgress.animateTo(0.8f, tween(800, easing = LinearEasing))
-            var savedPath: String? = null
-            if (real) {
-                val name = "payra_${System.currentTimeMillis()}." + if (isVideo) "mp4" else "jpg"
-                savedPath = withContext(Dispatchers.IO) { DeviceData.saveToDownloads(context, Uri.parse(item.uri), name)?.absolutePath }
+            val name = "payra_${System.currentTimeMillis()}." + if (isVideo) "mp4" else "jpg"
+            val result = withContext(Dispatchers.IO) {
+                val source = Uri.parse(item.uri)
+                val mime = try { context.contentResolver.getType(source) } catch (e: Exception) { null }
+                DeviceData.saveToDownloads(context, source, name, mime ?: if (isVideo) "video/mp4" else "image/jpeg")
             }
-            downloadProgress.animateTo(1f, tween(250))
-            downloadState = 2
-            Toast.makeText(
-                context,
-                if (savedPath != null) "Saved to Android/data/${context.packageName}/files/Download" else "Saved",
-                Toast.LENGTH_LONG,
-            ).show()
+            if (result == null) {
+                // Never claim success: the file was not really saved.
+                downloadState = 0
+                downloadProgress.snapTo(0f)
+                Toast.makeText(context, "Could not save the file", Toast.LENGTH_SHORT).show()
+            } else {
+                downloadProgress.animateTo(1f, tween(250))
+                downloadState = 2
+                Toast.makeText(context, "Saved to ${result.label}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -296,10 +310,10 @@ fun MediaViewerScreen(onBack: () -> Unit) {
             ) {
                 GlassCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", onClick = onBack)
                 Spacer(Modifier.weight(1f))
-                if (MediaViewerHolder.title.isNotEmpty()) {
+                if (title.isNotEmpty()) {
                     GlassSurface(shape = PayraShapes.Pill, fillAlpha = 0.6f) {
                         Text(
-                            MediaViewerHolder.title,
+                            title,
                             color = PayraColors.Ink,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,

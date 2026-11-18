@@ -177,7 +177,11 @@ fun ChatComposer(
         seconds = 0
         dragX = 0f
         dragY = 0f
-        if (result != null) onSendVoice(formatClock(result.second), result.first)
+        if (result != null) {
+            onSendVoice(formatClock(result.second), result.first)
+        } else if (send) {
+            Toast.makeText(context, "Could not save the recording", Toast.LENGTH_SHORT).show()
+        }
     }
 
     LaunchedEffect(mode, paused) {

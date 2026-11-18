@@ -8,6 +8,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -70,7 +71,9 @@ private fun bestLastKnown(context: Context): Location? {
     for (provider in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)) {
         try {
             val candidate = manager.getLastKnownLocation(provider)
-            if (candidate != null && (best == null || candidate.time > (best?.time ?: 0L))) best = candidate
+            // Only a fix that is at most 2 minutes old counts as "current".
+            val ageMs = if (candidate != null) (SystemClock.elapsedRealtimeNanos() - candidate.elapsedRealtimeNanos) / 1_000_000L else Long.MAX_VALUE
+            if (candidate != null && ageMs <= 120_000L && (best == null || candidate.time > (best?.time ?: 0L))) best = candidate
         } catch (e: SecurityException) {
             // permission missing: skip
         } catch (e: Exception) {

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.ui.graphics.SolidColor
@@ -67,9 +68,11 @@ fun AvatarCircle(
     size: Dp = 48.dp,
     modifier: Modifier = Modifier,
     imageUri: String = "",
+    blocked: Boolean = false,
 ) {
+    Box(modifier = modifier.size(size)) {
     Box(
-        modifier = modifier.size(size).clip(CircleShape).background(color),
+        modifier = Modifier.size(size).clip(CircleShape).background(color).then(if (blocked) Modifier.graphicsLayer { alpha = 0.45f } else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (imageUri.isNotEmpty()) {
@@ -82,6 +85,24 @@ fun AvatarCircle(
                 fontSize = (size.value * 0.4f).sp,
             )
         }
+    }
+    if (blocked) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size((size.value * 0.42f).dp)
+                .clip(CircleShape)
+                .background(PayraColors.Danger),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Block,
+                contentDescription = "Blocked",
+                tint = Color.White,
+                modifier = Modifier.size((size.value * 0.28f).dp),
+            )
+        }
+    }
     }
 }
 

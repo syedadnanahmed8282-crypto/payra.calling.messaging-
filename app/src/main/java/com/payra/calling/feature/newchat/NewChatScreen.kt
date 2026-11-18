@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.payra.calling.data.Contact
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.designsystem.AvatarCircle
+import com.payra.calling.designsystem.EmptyState
 import com.payra.calling.designsystem.GlassSearchField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -47,7 +48,7 @@ import com.payra.calling.designsystem.enterFromBottom
 fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, onNewContact: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-    val people = if (query.isBlank()) FakeChatStore.contacts.toList() else FakeChatStore.contacts.filter { it.name.contains(query, ignoreCase = true) }
+    val people = FakeChatStore.contacts.filter { !FakeChatStore.isBlocked(it.id) && (query.isBlank() || it.name.contains(query, ignoreCase = true)) }
     GlowBackground {
         Column(
             modifier = Modifier
@@ -81,7 +82,9 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, onNewContact
                 color = PayraColors.Muted,
                 modifier = Modifier.padding(start = 12.dp, bottom = 10.dp).enterFromBottom(3),
             )
-            GlassSurface(modifier = Modifier.fillMaxWidth()) {
+            if (people.isEmpty()) {
+                EmptyState(icon = Icons.Outlined.Search, title = "No people found", subtitle = "Try a different name")
+            } else GlassSurface(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     people.forEachIndexed { index, contact ->
                         ContactRow(

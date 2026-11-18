@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
@@ -27,6 +28,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.graphics.graphicsLayer
 import com.payra.calling.data.DeviceData
+import com.payra.calling.data.FakeChatStore
+import com.payra.calling.designsystem.openFile
+import com.payra.calling.designsystem.openLink
 import com.payra.calling.data.findUrls
 import com.payra.calling.data.preview
 import com.payra.calling.designsystem.PayraImage
@@ -327,44 +331,68 @@ private fun VoiceContent(duration: String, sent: Boolean, audioPath: String) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-private fun FileContent(name: String, info: String, sent: Boolean, fileUri: String) {
+private fun FileContent(messageId: Long, name: String, info: String, sent: Boolean, fileUri: String) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val fg = if (sent) Color.White else PayraColors.Ink
     val sub = if (sent) Color.White.copy(alpha = 0.8f) else PayraColors.Muted
     val tile = if (sent) Color.White.copy(alpha = 0.2f) else PayraColors.Primary.copy(alpha = 0.12f)
     val tint = if (sent) Color.White else PayraColors.Primary
-    // 0 = not downloaded, 1 = downloading, 2 = saved
-    var state by remember { mutableIntStateOf(if (sent) 2 else 0) }
-    var savedPath by remember { mutableStateOf("") }
+    // The state lives in the store (not in this bubble), so scrolling away and back keeps it.
+    // 0 = not downloaded, 1 = downloading, 2 = saved. Files you sent yourself start as "saved".
+    val saved = FakeChatStore.downloads[messageId]
+    val state = saved?.status ?: if (sent) 2 else 0
     val progress = remember { Animatable(0f) }
 
     fun download() {
         if (state != 0) return
-        state = 1
+        if (fileUri.isEmpty()) {
+            Toast.makeText(context, "This is a demo file, there is nothing to save", Toast.LENGTH_SHORT).show()
+            return
+        }
+        FakeChatStore.downloads[messageId] = FakeChatStore.DownloadInfo(1)
         scope.launch {
             progress.snapTo(0f)
             progress.animateTo(0.85f, tween(900, easing = LinearEasing))
-            val saved = withContext(Dispatchers.IO) {
-                if (fileUri.isNotEmpty()) DeviceData.saveToDownloads(context, Uri.parse(fileUri), name) else null
+            val result = withContext(Dispatchers.IO) {
+                val source = Uri.parse(fileUri)
+                val mime = try { context.contentResolver.getType(source) } catch (e: Exception) { null }
+                DeviceData.saveToDownloads(context, source, name, mime)
             }
-            progress.animateTo(1f, tween(250))
-            savedPath = saved?.absolutePath.orEmpty()
-            state = 2
-            Toast.makeText(
-                context,
-                if (saved != null) "Saved: Android/data/${context.packageName}/files/Download" else "Saved",
-                Toast.LENGTH_SHORT,
-            ).show()
+            if (result == null) {
+                FakeChatStore.downloads.remove(messageId)
+                Toast.makeText(context, "Could not save the file", Toast.LENGTH_SHORT).show()
+            } else {
+                progress.animateTo(1f, tween(250))
+                FakeChatStore.downloads[messageId] = FakeChatStore.DownloadInfo(2, result.uri, result.label)
+                Toast.makeText(context, "Saved to ${result.label}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(tile),
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(tile)
+                .bouncyClick(
+                    onClick = {
+                        // Tapping the file opens it (the saved copy if there is one, else the original).
+                        val target = saved?.uri?.takeIf { it.isNotEmpty() } ?: fileUri
+                        if (state == 2 && target.isNotEmpty()) {
+                            openFile(context, target)
+                        } else if (state == 2) {
+                            Toast.makeText(context, "This is a demo file, there is nothing to open", Toast.LENGTH_SHORT).show()
+                        } else if (state == 0) {
+                            download()
+                        }
+                    },
+                    pressedScale = 0.92f,
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.InsertDriveFile, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            Icon(Icons.Outlined.InsertDriveFile, contentDescription = "Open file", tint = tint, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.widthIn(max = 150.dp)) {
@@ -379,17 +407,12 @@ private fun FileContent(name: String, info: String, sent: Boolean, fileUri: Stri
                     onClick = {
                         if (state == 0) {
                             download()
-                        } else if (state == 2 && savedPath.isNotEmpty()) {
-                            try {
-                                val file = java.io.File(savedPath)
-                                val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-                                val mime = android.webkit.MimeTypeMap.getSingleton()
-                                    .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
+                        } else if (state == 2) {
+                            val target = saved?.uri?.takeIf { it.isNotEmpty() } ?: fileUri
+                            if (target.isNotEmpty()) {
+                                openFile(context, target)
+                            } else {
+                                Toast.makeText(context, "This is a demo file, there is nothing to open", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -674,13 +697,14 @@ fun StatusTicks(status: MessageStatus) {
 /** Text where web links are underlined and open in the browser when tapped. */
 @Composable
 private fun LinkedText(text: String, color: Color, sent: Boolean) {
+    val context = LocalContext.current
     val urls = remember(text) { text.findUrls() }
     if (urls.isEmpty()) {
         Text(text, color = color, fontSize = 15.sp)
         return
     }
     val linkColor = if (sent) Color.White else PayraColors.Primary
-    val annotated = remember(text, linkColor) {
+    val annotated = remember(text, linkColor, context) {
         buildAnnotatedString {
             var cursor = 0
             urls.forEach { url ->
@@ -689,9 +713,10 @@ private fun LinkedText(text: String, color: Color, sent: Boolean) {
                     append(text.substring(cursor, start))
                     val target = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
                     withLink(
-                        LinkAnnotation.Url(
-                            target,
-                            TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)),
+                        LinkAnnotation.Clickable(
+                            tag = target,
+                            styles = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.SemiBold)),
+                            linkInteractionListener = LinkInteractionListener { openLink(context, target) },
                         ),
                     ) { append(url) }
                     cursor = start + url.length
@@ -746,7 +771,7 @@ fun BubbleBody(
                     }
                 }
                 MessageKind.Voice -> VoiceContent(message.voiceDuration, sent, message.audioPath)
-                MessageKind.File -> FileContent(message.fileName, message.fileInfo, sent, message.fileUri)
+                MessageKind.File -> FileContent(message.id, message.fileName, message.fileInfo, sent, message.fileUri)
                 MessageKind.Location -> LocationContent(message.placeName, message.placeAddress, sent)
                 MessageKind.ContactCard -> ContactCardContent(message.contactName, message.contactPhone, sent)
                 MessageKind.CallLog -> Unit

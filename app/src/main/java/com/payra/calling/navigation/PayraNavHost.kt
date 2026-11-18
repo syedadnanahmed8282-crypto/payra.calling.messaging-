@@ -1,5 +1,7 @@
 package com.payra.calling.navigation
 
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -20,7 +22,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.MediaItem
-import com.payra.calling.data.MediaViewerHolder
 import com.payra.calling.designsystem.Motion
 import com.payra.calling.feature.auth.ForgotPasswordScreen
 import com.payra.calling.feature.auth.LoginScreen
@@ -43,6 +44,7 @@ import com.payra.calling.feature.media.SharedMediaScreen
 import com.payra.calling.feature.newchat.NewChatScreen
 import com.payra.calling.feature.permissions.PermissionPages
 import com.payra.calling.feature.permissions.PermissionScreen
+import com.payra.calling.feature.profile.CropScreen
 import com.payra.calling.feature.profile.EditProfileScreen
 import com.payra.calling.feature.profile.ProfileScreen
 import com.payra.calling.feature.settings.AboutSettingsScreen
@@ -77,7 +79,8 @@ object Routes {
     const val CALL = "call"
     const val PROFILE = "profile/{contactId}/{self}"
     const val EDIT_PROFILE = "edit_profile"
-    const val MEDIA_VIEWER = "media_viewer"
+    const val MEDIA_VIEWER = "media_viewer?uri={uri}&video={video}&dur={dur}&tone={tone}&title={title}"
+    const val CROP = "crop/{kind}?uri={uri}"
     const val PICKER = "picker/{contactId}"
     const val CONTACT_PICKER = "contact_picker/{contactId}"
     const val SHARE_LOCATION = "share_location/{contactId}"
@@ -92,6 +95,9 @@ object Routes {
     fun chat(contactId: String) = "chat/$contactId"
     fun forward(contactId: String, ids: List<Long>) = "forward/$contactId/${ids.joinToString(",")}"
     fun profile(contactId: String, self: Boolean) = "profile/$contactId/$self"
+    fun mediaViewer(item: MediaItem, title: String) =
+        "media_viewer?uri=${Uri.encode(item.uri)}&video=${item.isVideo}&dur=${Uri.encode(item.duration)}&tone=${item.tone}&title=${Uri.encode(title)}"
+    fun crop(kind: String, uri: String) = "crop/$kind?uri=${Uri.encode(uri)}"
     fun picker(contactId: String) = "picker/$contactId"
     fun contactPicker(contactId: String) = "contact_picker/$contactId"
     fun shareLocation(contactId: String) = "share_location/$contactId"
@@ -100,6 +106,10 @@ object Routes {
     fun sharedMedia(contactId: String) = "shared_media/$contactId"
     fun wallpaperChat(contactId: String) = "wallpaper_chat/$contactId"
 }
+
+/** Navigation normally hands back readable text; if an address still looks percent-encoded, decode it once. */
+private fun decodeIfNeeded(value: String): String =
+    if (value.startsWith("content%3A") || value.startsWith("file%3A") || value.startsWith("http%3A") || value.startsWith("https%3A") || value.contains("%2F") || value.contains("%20")) Uri.decode(value) else value
 
 @Composable
 fun PayraNavHost() {
@@ -120,15 +130,22 @@ fun PayraNavHost() {
     }
 
     fun startCall(contactId: String, incoming: Boolean, video: Boolean) {
-        CallManager.start(context, contactId, incoming, video)
+        if (FakeChatStore.isBlocked(contactId)) {
+            Toast.makeText(context, "Unblock this person first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // start() refuses when another call is still running; never open the old call for a different person.
+        if (!CallManager.start(context, contactId, incoming, video)) {
+            Toast.makeText(context, "Finish your current call first", Toast.LENGTH_SHORT).show()
+            return
+        }
         CallManager.minimized = false
         nav.navigate(Routes.CALL) { launchSingleTop = true }
     }
 
     fun openViewer(item: MediaItem, title: String) {
-        MediaViewerHolder.item = item
-        MediaViewerHolder.title = title
-        nav.navigate(Routes.MEDIA_VIEWER)
+        // Everything the viewer needs travels inside the route, so it also works after the app was restarted.
+        nav.navigate(Routes.mediaViewer(item, title))
     }
 
     fun sendAndFinish(contactId: String, send: () -> Long) {
@@ -275,6 +292,10 @@ fun PayraNavHost() {
                 CallScreen(
                     onMinimize = { nav.popBackStack() },
                     onClose = { nav.popBackStack() },
+                    onMessage = { id ->
+                        nav.popBackStack()
+                        nav.navigate(Routes.chat(id))
+                    },
                 )
             }
             composable(
@@ -298,10 +319,52 @@ fun PayraNavHost() {
                 )
             }
             composable(Routes.EDIT_PROFILE) {
-                EditProfileScreen(contactId = FakeChatStore.me.id, onBack = { nav.popBackStack() })
+                EditProfileScreen(
+                    contactId = FakeChatStore.me.id,
+                    onBack = { nav.popBackStack() },
+                    onCrop = { kind, uri -> nav.navigate(Routes.crop(kind, uri)) },
+                )
             }
-            composable(Routes.MEDIA_VIEWER) {
-                MediaViewerScreen(onBack = { nav.popBackStack() })
+            composable(
+                route = Routes.CROP,
+                arguments = listOf(
+                    navArgument("kind") { type = NavType.StringType },
+                    navArgument("uri") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                val kind = entry.arguments?.getString("kind").orEmpty()
+                val uri = decodeIfNeeded(entry.arguments?.getString("uri").orEmpty())
+                CropScreen(
+                    kind = kind,
+                    sourceUri = uri,
+                    onCancel = { nav.popBackStack() },
+                    onDone = { saved ->
+                        FakeChatStore.updateContact(FakeChatStore.me.id) {
+                            if (kind == "cover") it.copy(coverUri = saved) else it.copy(avatarUri = saved)
+                        }
+                        nav.popBackStack()
+                    },
+                )
+            }
+            composable(
+                route = Routes.MEDIA_VIEWER,
+                arguments = listOf(
+                    navArgument("uri") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("video") { type = NavType.StringType; defaultValue = "false" },
+                    navArgument("dur") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("tone") { type = NavType.StringType; defaultValue = "0" },
+                    navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                val args = entry.arguments
+                MediaViewerScreen(
+                    uri = decodeIfNeeded(args?.getString("uri").orEmpty()),
+                    isVideo = args?.getString("video") == "true",
+                    duration = decodeIfNeeded(args?.getString("dur").orEmpty()),
+                    tone = args?.getString("tone")?.toIntOrNull() ?: 0,
+                    title = decodeIfNeeded(args?.getString("title").orEmpty()),
+                    onBack = { nav.popBackStack() },
+                )
             }
             composable(
                 route = Routes.PICKER,

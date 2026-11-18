@@ -187,17 +187,7 @@ fun SharedMediaScreen(contactId: String, onBack: () -> Unit, onOpenMedia: (Media
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .bouncyClick(
-                                                onClick = {
-                                                    try {
-                                                        val target = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
-                                                        context.startActivity(
-                                                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target))
-                                                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                                        )
-                                                    } catch (e: Exception) {
-                                                        android.widget.Toast.makeText(context, "No browser found", android.widget.Toast.LENGTH_SHORT).show()
-                                                    }
-                                                },
+                                                onClick = { com.payra.calling.designsystem.openLink(context, url) },
                                                 pressedScale = 0.97f,
                                             )
                                             .padding(12.dp),

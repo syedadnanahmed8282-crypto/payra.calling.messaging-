@@ -32,6 +32,9 @@ import com.payra.calling.data.DeviceContact
 import com.payra.calling.data.DeviceData
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.designsystem.AvatarCircle
+import com.payra.calling.designsystem.EmptyState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
 import com.payra.calling.designsystem.GlassScaffold
 import com.payra.calling.designsystem.GlassSearchField
 import com.payra.calling.designsystem.GlassSurface
@@ -73,7 +76,7 @@ fun ContactPickerScreen(onBack: () -> Unit, onPicked: (name: String, phone: Stri
     val source = if (contacts.isNotEmpty()) {
         contacts
     } else {
-        FakeChatStore.contacts.map { DeviceContact(it.name, "+880 1XXX XXXXXX") }
+        FakeChatStore.contacts.filter { !FakeChatStore.isBlocked(it.id) }.map { DeviceContact(it.name, "+880 1XXX XXXXXX") }
     }
     val filtered = if (query.isBlank()) source else source.filter {
         it.name.contains(query, ignoreCase = true) || it.phone.contains(query)
@@ -110,7 +113,7 @@ fun ContactPickerScreen(onBack: () -> Unit, onPicked: (name: String, phone: Stri
                 GlassSurface(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(8.dp)) {
                         if (filtered.isEmpty()) {
-                            Text("No contacts found", color = PayraColors.Muted, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
+                            EmptyState(icon = Icons.Outlined.Search, title = "No contacts found", subtitle = "Try a different name or number")
                         }
                         filtered.take(300).forEachIndexed { index, contact ->
                             Row(

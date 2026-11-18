@@ -24,8 +24,15 @@ object FakeChatStore {
 
     val conversations = mutableStateListOf<Conversation>()
 
-    /** Ids of blocked contacts (demo). */
+    /** Ids of blocked contacts (demo). Kept here so every screen sees the same flag. */
     val blocked = mutableStateListOf("tanvir")
+
+    fun isBlocked(contactId: String): Boolean = contactId in blocked
+
+    /** Download state of file messages, kept here so it survives scrolling away from the bubble. */
+    data class DownloadInfo(val status: Int, val uri: String = "", val label: String = "")
+
+    val downloads = androidx.compose.runtime.mutableStateMapOf<Long, DownloadInfo>()
 
     private var nextId = 1L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -235,6 +242,7 @@ object FakeChatStore {
 
     /** DEMO ONLY: a fake incoming message so the "message received" animation can be seen. */
     fun receiveDemo(conversation: Conversation) {
+        if (isBlocked(conversation.contact.id)) return
         val text = demoReplies[demoReplyIndex % demoReplies.size]
         demoReplyIndex++
         addMessage(conversation) { id, t -> ChatMessage(id, false, t, text = text) }

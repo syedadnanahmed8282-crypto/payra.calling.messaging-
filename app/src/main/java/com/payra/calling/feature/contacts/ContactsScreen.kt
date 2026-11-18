@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.designsystem.AvatarCircle
+import com.payra.calling.designsystem.EmptyState
 import com.payra.calling.designsystem.GlassSearchField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -84,7 +85,13 @@ fun ContactsScreen(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 12.dp, bottom = 10.dp).enterFromBottom(3),
         )
-        GlassSurface(modifier = Modifier.fillMaxSize()) {
+        if (people.isEmpty()) {
+            EmptyState(
+                icon = Icons.Outlined.Search,
+                title = if (query.isBlank()) "No contacts yet" else "No results",
+                subtitle = if (query.isBlank()) "Add a contact to get started" else "Try a different name",
+            )
+        } else GlassSurface(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = contentPadding.calculateBottomPadding() + 8.dp),
@@ -98,11 +105,11 @@ fun ContactsScreen(
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 52.dp)
+                        AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 52.dp, imageUri = contact.avatarUri, blocked = FakeChatStore.isBlocked(contact.id))
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(contact.name, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)
-                            Text(contact.about, fontSize = 14.sp, color = PayraColors.Muted)
+                            Text(if (FakeChatStore.isBlocked(contact.id)) "Blocked" else contact.about, fontSize = 14.sp, color = if (FakeChatStore.isBlocked(contact.id)) PayraColors.Danger else PayraColors.Muted)
                         }
                         Icon(
                             Icons.Outlined.ChatBubbleOutline,

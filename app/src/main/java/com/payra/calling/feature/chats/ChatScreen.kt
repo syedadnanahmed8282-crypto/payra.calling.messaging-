@@ -120,6 +120,8 @@ import com.payra.calling.data.MessageStatus
 import com.payra.calling.data.ReplyRef
 import com.payra.calling.data.preview
 import com.payra.calling.designsystem.AvatarCircle
+import com.payra.calling.designsystem.EmptyState
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import com.payra.calling.designsystem.BouncingDots
 import com.payra.calling.designsystem.GlassCircleButton
 import com.payra.calling.designsystem.GlassScaffold
@@ -162,6 +164,7 @@ fun ChatScreen(
     onOpenWallpaper: () -> Unit,
 ) {
     val convo = remember(contactId) { FakeChatStore.conversationFor(contactId) }
+    val isBlocked = FakeChatStore.isBlocked(convo.contact.id)
     val baselineId = remember(contactId) { convo.messages.lastOrNull()?.id ?: 0L }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = convo.messages.size)
     val scope = rememberCoroutineScope()
@@ -254,6 +257,7 @@ fun ChatScreen(
             FakeChatStore.setStatus(convo, id, MessageStatus.Delivered)
             delay(500)
             FakeChatStore.setStatus(convo, id, MessageStatus.Read)
+            if (FakeChatStore.isBlocked(convo.contact.id)) return@launch
             typing = true
             delay(1500)
             typing = false
@@ -287,7 +291,8 @@ fun ChatScreen(
     var pendingCamera by remember { mutableIntStateOf(0) }
 
     fun newCaptureUri(extension: String): Uri {
-        val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+        // Camera photos / videos are user content: keep them in filesDir, not in the cache.
+        val dir = File(context.filesDir, "captures").apply { mkdirs() }
         val file = File(dir, "capture_${System.currentTimeMillis()}.$extension")
         return FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
     }
@@ -304,6 +309,11 @@ fun ChatScreen(
     }
     val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {
+                android.util.Log.w("PayraChat", "could not keep access to $uri", e)
+            }
             val (name, info) = DeviceData.fileInfo(context, uri)
             val message = FakeChatStore.sendFile(convo, name, info, uri.toString())
             FakeChatStore.simulateDelivery(convo, message.id, 2200L)
@@ -363,9 +373,16 @@ fun ChatScreen(
                             contact = convo.contact,
                             typing = typing,
                             muted = convo.muted,
+                            blocked = isBlocked,
                             callExpanded = callExpanded,
                             onBack = onBack,
-                            onCallTap = { callExpanded = true },
+                            onCallTap = {
+                                if (isBlocked) {
+                                    Toast.makeText(context, "Unblock ${convo.contact.name} to call", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    callExpanded = true
+                                }
+                            },
                             onAudioCall = {
                                 callExpanded = false
                                 onCall(false)
@@ -442,7 +459,10 @@ fun ChatScreen(
                                 onDelete = { showDelete = true },
                             )
                         } else {
-                            ChatComposer(
+                            if (isBlocked) BlockedBar(
+                                name = convo.contact.name,
+                                onUnblock = { FakeChatStore.unblock(convo.contact.id) },
+                            ) else ChatComposer(
                                 draft = draft,
                                 onDraftChange = { draft = it },
                                 isEditing = editTarget != null,
@@ -461,7 +481,7 @@ fun ChatScreen(
                         }
                     }
                     AnimatedVisibility(
-                        visible = emojiOpen && !selecting,
+                        visible = emojiOpen && !selecting && !isBlocked,
                         enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 400f)) + fadeIn(tween(160)),
                         exit = shrinkVertically() + fadeOut(tween(120)),
                     ) {
@@ -487,9 +507,27 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item(key = "date") { DateChip("Today") }
+                    if (convo.messages.isEmpty()) {
+                        item(key = "empty") {
+                            EmptyState(
+                                icon = Icons.Outlined.ChatBubbleOutline,
+                                title = "No messages yet",
+                                subtitle = "Say hi to ${convo.contact.name}",
+                            )
+                        }
+                    }
                     items(convo.messages, key = { it.id }) { message ->
                         if (message.kind == MessageKind.CallLog) {
-                            CallLogRow(message = message, onCallBack = { onCall(message.callVideo) })
+                            CallLogRow(
+                                message = message,
+                                onCallBack = {
+                                    if (isBlocked) {
+                                        Toast.makeText(context, "Unblock ${convo.contact.name} to call", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        onCall(message.callVideo)
+                                    }
+                                },
+                            )
                         } else {
                             MessageRow(
                                 message = message,
@@ -743,6 +781,7 @@ private fun ChatHeader(
     contact: Contact,
     typing: Boolean,
     muted: Boolean,
+    blocked: Boolean,
     callExpanded: Boolean,
     onBack: () -> Unit,
     onCallTap: () -> Unit,
@@ -768,7 +807,7 @@ private fun ChatHeader(
                 modifier = Modifier.padding(start = 8.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 40.dp, imageUri = contact.avatarUri)
+                AvatarCircle(initial = contact.name.take(1), color = contact.color, size = 40.dp, imageUri = contact.avatarUri, blocked = blocked)
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -794,7 +833,13 @@ private fun ChatHeader(
                             )
                         }
                     }
-                    AnimatedContent(
+                    if (blocked) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Block, contentDescription = null, tint = PayraColors.Danger, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Blocked", fontSize = 12.sp, color = PayraColors.Danger, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    } else AnimatedContent(
                         targetState = typing,
                         transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
                         label = "status",
@@ -826,6 +871,7 @@ private fun ChatHeader(
             ) {
                 Row(
                     modifier = Modifier
+                        .graphicsLayer { alpha = if (blocked) 0.4f else 1f }
                         .clip(RoundedCornerShape(22.dp))
                         .background(capsuleColor)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1089,6 +1135,40 @@ private fun LazyItemScope.TypingBubble() {
                 color = PayraColors.Muted,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
             )
+        }
+    }
+}
+
+
+/** Shown instead of the message bar when you blocked this person. */
+@Composable
+private fun BlockedBar(name: String, onUnblock: () -> Unit) {
+    GlassSurface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 18.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.Block, contentDescription = null, tint = PayraColors.Danger, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "You blocked $name. Unblock to send messages.",
+                color = PayraColors.Ink,
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(PayraColors.Primary)
+                    .bouncyClick(onClick = onUnblock, pressedScale = 0.92f)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                Text("Unblock", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

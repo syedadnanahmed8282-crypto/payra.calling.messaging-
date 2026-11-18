@@ -59,7 +59,7 @@ import com.payra.calling.designsystem.enterFromBottom
 
 /** Figma screen "23 Edit Profile": really choose a cover photo and a profile photo from your gallery. */
 @Composable
-fun EditProfileScreen(contactId: String, onBack: () -> Unit) {
+fun EditProfileScreen(contactId: String, onBack: () -> Unit, onCrop: (kind: String, uri: String) -> Unit) {
     val context = LocalContext.current
     val contact = FakeChatStore.contact(contactId)
     var name by remember { mutableStateOf(contact.name) }
@@ -76,13 +76,13 @@ fun EditProfileScreen(contactId: String, onBack: () -> Unit) {
     val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             keepAccess(uri)
-            FakeChatStore.updateContact(contactId) { it.copy(avatarUri = uri.toString()) }
+            onCrop("avatar", uri.toString())
         }
     }
     val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
             keepAccess(uri)
-            FakeChatStore.updateContact(contactId) { it.copy(coverUri = uri.toString()) }
+            onCrop("cover", uri.toString())
         }
     }
     val imageOnly = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)

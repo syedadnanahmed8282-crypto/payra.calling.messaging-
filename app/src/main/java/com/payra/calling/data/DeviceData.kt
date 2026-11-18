@@ -119,17 +119,58 @@ object DeviceData {
         return name to listOf(sizeText, ext).filter { it.isNotEmpty() }.joinToString("  ")
     }
 
-    /** Copies a picked file into the app's own Downloads folder (no permission needed). Returns the saved file or null. */
-    fun saveToDownloads(context: Context, uri: Uri, fileName: String): File? {
+    /** A file that was really saved: [uri] opens it, [label] is a short place name for the message. */
+    data class SavedFile(val uri: String, val label: String)
+
+    /**
+     * Saves a copy of [source] (content:// address) as a download. Returns null unless the saved file really exists
+     * and is not empty - so the caller can show a failure instead of a false "Saved".
+     * Android 10+: public Downloads/Payra folder (MediaStore). Older phones: the app's own Downloads folder.
+     */
+    fun saveToDownloads(context: Context, source: Uri, fileName: String, mime: String? = null): SavedFile? {
+        val name = fileName.ifBlank { "payra_${System.currentTimeMillis()}" }
         return try {
-            val dir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-            dir.mkdirs()
-            val target = File(dir, fileName.ifBlank { "payra_${System.currentTimeMillis()}" })
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+            if (Build.VERSION.SDK_INT >= 29) {
+                val values = android.content.ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, name)
+                    if (!mime.isNullOrBlank()) put(MediaStore.Downloads.MIME_TYPE, mime)
+                    put(MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Payra")
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val target = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+                var written = 0L
+                try {
+                    resolver.openInputStream(source)?.use { input ->
+                        resolver.openOutputStream(target)?.use { output -> written = input.copyTo(output) }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("PayraSave", "copy failed", e)
+                    written = 0L
+                }
+                if (written <= 0L) {
+                    resolver.delete(target, null, null)
+                    return null
+                }
+                val done = android.content.ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
+                resolver.update(target, done, null, null)
+                SavedFile(target.toString(), "Downloads/Payra")
+            } else {
+                val dir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+                dir.mkdirs()
+                val target = File(dir, name)
+                context.contentResolver.openInputStream(source)?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+                if (target.exists() && target.length() > 0L) {
+                    SavedFile(Uri.fromFile(target).toString(), "the app's Downloads folder")
+                } else {
+                    target.delete()
+                    null
+                }
             }
-            if (target.exists() && target.length() > 0) target else null
         } catch (e: Exception) {
+            android.util.Log.e("PayraSave", "save failed for $source", e)
             null
         }
     }

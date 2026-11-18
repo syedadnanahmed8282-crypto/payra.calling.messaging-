@@ -52,10 +52,21 @@ object CallManager {
     val isFinished: Boolean
         get() = phase == CallPhase.Busy || phase == CallPhase.NoAnswer || phase == CallPhase.Declined || phase == CallPhase.Ended
 
-    fun start(context: Context, contactId: String, incoming: Boolean, video: Boolean) {
+    /**
+     * Starts (or restores) a call. Returns false when the call was refused: a blocked contact, or another
+     * call with someone else is still running. A call that already finished (result screen) is closed first.
+     */
+    fun start(context: Context, contactId: String, incoming: Boolean, video: Boolean): Boolean {
+        if (FakeChatStore.isBlocked(contactId)) return false
         if (active) {
-            minimized = false
-            return
+            if (isFinished) {
+                close()
+            } else if (this.contactId == contactId) {
+                minimized = false
+                return true
+            } else {
+                return false
+            }
         }
         closeJob?.cancel()
         scriptJob?.cancel()
@@ -101,6 +112,7 @@ object CallManager {
                 }
             }
         }
+        return true
     }
 
     fun answer() {

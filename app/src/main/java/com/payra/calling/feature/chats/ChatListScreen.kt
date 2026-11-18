@@ -49,6 +49,7 @@ import com.payra.calling.data.Conversation
 import com.payra.calling.data.FakeChatStore
 import com.payra.calling.data.preview
 import com.payra.calling.designsystem.AvatarCircle
+import com.payra.calling.designsystem.EmptyState
 import com.payra.calling.designsystem.GlassCircleButton
 import com.payra.calling.designsystem.GlassSearchField
 import com.payra.calling.designsystem.GlassSurface
@@ -111,7 +112,9 @@ fun ChatListScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            if (visible.isEmpty() && archivedCount == 0) {
+            if (visible.isEmpty() && query.isNotBlank()) {
+                EmptyState(icon = Icons.Outlined.Search, title = "No results", subtitle = "Try a different name or word")
+            } else if (visible.isEmpty() && archivedCount == 0) {
                 EmptyChats(onNewChat)
             } else {
                 GlassSurface(modifier = Modifier.fillMaxSize()) {
@@ -202,6 +205,7 @@ private fun LazyItemScope.ChatRow(
     onLongClick: () -> Unit,
 ) {
     val last = convo.messages.lastOrNull()
+    val blocked = FakeChatStore.isBlocked(convo.contact.id)
     Row(
         modifier = Modifier
             .animateItem()
@@ -217,7 +221,7 @@ private fun LazyItemScope.ChatRow(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarCircle(initial = convo.contact.name.take(1), color = convo.contact.color, size = 52.dp)
+        AvatarCircle(initial = convo.contact.name.take(1), color = convo.contact.color, size = 52.dp, imageUri = convo.contact.avatarUri, blocked = blocked)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -229,9 +233,9 @@ private fun LazyItemScope.ChatRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = last?.preview() ?: "No messages yet",
+                text = if (blocked) "Blocked" else last?.preview() ?: "No messages yet",
                 fontSize = 14.sp,
-                color = PayraColors.Muted,
+                color = if (blocked) PayraColors.Danger else PayraColors.Muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

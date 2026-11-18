@@ -62,6 +62,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -140,40 +141,52 @@ fun ProfileScreen(
                 },
         ) {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                // Cover (tap to see it full screen)
+                // Cover: crisp picture with soft bottom corners (tap to see it full screen)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(230.dp)
-                        .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.60f), accent.copy(alpha = 0.10f))))
+                        .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                        .background(accent.copy(alpha = if (contact.coverUri.isEmpty()) 0.35f else 0f))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                             if (contact.coverUri.isNotEmpty()) onViewImage(MediaItem(0, false, "", contact.coverUri), "Cover photo")
                         },
                 ) {
                     if (contact.coverUri.isNotEmpty()) {
                         PayraImage(model = contact.coverUri, modifier = Modifier.fillMaxSize())
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Brush.verticalGradient(listOf(Color.Transparent, PayraColors.Background.copy(alpha = 0.55f)))),
-                        )
                     }
                 }
-                // Avatar: half over the cover, half below (tap to see it full screen)
-                Box(modifier = Modifier.fillMaxWidth().height(52.dp), contentAlignment = Alignment.TopCenter) {
-                    AvatarCircle(
-                        initial = contact.name.take(1),
-                        color = accent,
-                        size = 104.dp,
-                        imageUri = contact.avatarUri,
+                // Profile photo: a big, softly rounded square, half over the cover (tap to see it full screen)
+                Box(modifier = Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.TopCenter) {
+                    Box(
                         modifier = Modifier
-                            .offset(y = (-52).dp)
+                            .offset(y = (-68).dp)
+                            .size(136.dp)
                             .popIn()
-                            .border(4.dp, PayraColors.Background, CircleShape)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(accent)
+                            .border(4.dp, PayraColors.Background, RoundedCornerShape(28.dp))
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (contact.avatarUri.isNotEmpty()) onViewImage(MediaItem(0, false, "", contact.avatarUri), "Profile photo")
                             },
-                    )
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (isBlocked) 0.45f else 1f }, contentAlignment = Alignment.Center) {
+                            if (contact.avatarUri.isNotEmpty()) {
+                                PayraImage(model = contact.avatarUri, modifier = Modifier.fillMaxSize())
+                            } else {
+                                Text(contact.name.take(1), color = Color.White, fontSize = 56.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        if (isBlocked) {
+                            Box(
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(38.dp).clip(CircleShape).background(PayraColors.Danger),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Outlined.Block, contentDescription = "Blocked", tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                    }
                 }
 
                 Column(

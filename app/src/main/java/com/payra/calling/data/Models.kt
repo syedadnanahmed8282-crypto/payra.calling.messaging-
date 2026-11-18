@@ -84,10 +84,37 @@ class Conversation(val contact: Contact) {
     var wallpaperUri by mutableStateOf("")
 }
 
-/** Finds web links inside a text. */
+private val LinkTlds = setOf(
+    "com", "net", "org", "io", "app", "me", "co", "dev", "info", "biz", "xyz", "online", "site", "store", "shop",
+    "tv", "ly", "gl", "gd", "be", "bd", "in", "pk", "uk", "us", "ca", "au", "de", "fr", "edu", "gov",
+)
+
+private val LinkRegex = Regex(
+    "(?i)(?:https?://[^\\s<>\"']+|www\\.[^\\s<>\"']+|(?<![\\w@.-])[a-z0-9][a-z0-9-]*(?:\\.[a-z0-9-]+)*\\.[a-z]{2,}(?:/[^\\s<>\"']*)?)",
+)
+
+/**
+ * Finds web links inside a text. A link needs "http(s)://", "www." or a real domain ending (like .com).
+ * File names (main.py, README.md), e-mail addresses and anything touching an "@" are ignored.
+ */
 fun String.findUrls(): List<String> {
-    val matcher = android.util.Patterns.WEB_URL.matcher(this)
     val found = mutableListOf<String>()
-    while (matcher.find()) found.add(matcher.group())
+    for (match in LinkRegex.findAll(this)) {
+        var url = match.value.trimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '\'', '"')
+        if (url.isEmpty()) continue
+        val start = match.range.first
+        val end = start + url.length
+        if (start > 0 && this[start - 1] == '@') continue
+        if (end < length && this[end] == '@') continue
+        val lower = url.lowercase()
+        val hasScheme = lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("www.")
+        if (!hasScheme) {
+            val host = lower.substringBefore('/').substringBefore('?')
+            val tld = host.substringAfterLast('.')
+            if (tld !in LinkTlds) continue
+            if ('@' in url) continue
+        }
+        found.add(url)
+    }
     return found
 }

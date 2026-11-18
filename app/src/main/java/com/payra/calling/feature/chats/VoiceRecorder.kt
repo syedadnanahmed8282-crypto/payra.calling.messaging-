@@ -28,7 +28,9 @@ class VoiceRecorder(private val context: Context) {
     fun start(): Boolean {
         cancel()
         return try {
-            val target = File(context.cacheDir, "voice_${System.currentTimeMillis()}.m4a")
+            // Voice notes are user content: keep them in filesDir (clearing the cache must never delete them).
+            val dir = File(context.filesDir, "voice").apply { mkdirs() }
+            val target = File(dir, "voice_${System.currentTimeMillis()}.m4a")
             val r = newRecorder()
             r.setAudioSource(MediaRecorder.AudioSource.MIC)
             r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
