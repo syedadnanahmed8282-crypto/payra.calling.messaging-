@@ -1,5 +1,9 @@
 package com.payra.calling.feature.calls
 
+import com.payra.calling.designsystem.EmptyState
+import com.payra.calling.designsystem.SkeletonList
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -66,6 +70,14 @@ fun CallListScreen(
 ) {
     var filter by remember { mutableStateOf("All") }
     val shown = if (filter == "Missed") FakeCalls.filter { it.missed } else FakeCalls
+    var loading by remember { mutableStateOf("calls" !in FakeChatStore.loadedScreens) }
+    LaunchedEffect(Unit) {
+        if (loading) {
+            delay(900)
+            FakeChatStore.loadedScreens.add("calls")
+            loading = false
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -103,7 +115,15 @@ fun CallListScreen(
         }
         Spacer(Modifier.height(12.dp))
 
-        GlassSurface(modifier = Modifier.fillMaxSize()) {
+        if (loading) {
+            GlassSurface(modifier = Modifier.fillMaxSize()) { SkeletonList() }
+        } else if (shown.isEmpty()) {
+            EmptyState(
+                icon = Icons.Outlined.Call,
+                title = if (filter == "Missed") "No missed calls" else "No calls yet",
+                subtitle = if (filter == "Missed") "Calls you miss will show up here" else "Start a call from a chat or a contact",
+            )
+        } else GlassSurface(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = contentPadding.calculateBottomPadding() + 8.dp),

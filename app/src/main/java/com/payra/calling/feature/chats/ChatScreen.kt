@@ -162,6 +162,7 @@ fun ChatScreen(
     onOpenSearch: () -> Unit,
     onOpenSharedMedia: () -> Unit,
     onOpenWallpaper: () -> Unit,
+    onPreviewMedia: (List<MediaItem>) -> Unit,
 ) {
     val convo = remember(contactId) { FakeChatStore.conversationFor(contactId) }
     val isBlocked = FakeChatStore.isBlocked(convo.contact.id)
@@ -186,6 +187,7 @@ fun ChatScreen(
     var showClear by remember { mutableStateOf(false) }
     var showBlock by remember { mutableStateOf(false) }
     var showReactionSheet by remember { mutableStateOf(false) }
+    var reactionsFor by remember { mutableStateOf<Long?>(null) }
     var emojiOpen by remember { mutableStateOf(false) }
     var callExpanded by remember { mutableStateOf(false) }
     var lastSpot by remember { mutableStateOf<SelectedSpot?>(null) }
@@ -228,10 +230,11 @@ fun ChatScreen(
 
     BackHandler(
         enabled = selecting || showAttach || showDelete || showMenu || showClear || showBlock ||
-            showReactionSheet || emojiOpen || callExpanded || bannerMessage != null,
+            showReactionSheet || reactionsFor != null || emojiOpen || callExpanded || bannerMessage != null,
     ) {
         when {
             showReactionSheet -> showReactionSheet = false
+            reactionsFor != null -> reactionsFor = null
             showDelete -> showDelete = false
             showClear -> showClear = false
             showBlock -> showBlock = false
@@ -299,12 +302,12 @@ fun ChatScreen(
 
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = captureUri
-        if (ok && uri != null) sendMediaItems(listOf(MediaItem(0, false, "", uri.toString())))
+        if (ok && uri != null) onPreviewMedia(listOf(MediaItem(0, false, "", uri.toString())))
     }
     val recordVideo = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
         val uri = captureUri
         if (ok && uri != null) {
-            sendMediaItems(listOf(MediaItem(0, true, DeviceData.videoDurationLabel(context, uri), uri.toString())))
+            onPreviewMedia(listOf(MediaItem(0, true, DeviceData.videoDurationLabel(context, uri), uri.toString())))
         }
     }
     val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -558,6 +561,7 @@ fun ChatScreen(
                                     if (index >= 0) scope.launch { listState.animateScrollToItem(index + 1) }
                                 },
                                 onReact = { emoji -> FakeChatStore.toggleReaction(convo, message.id, emoji) },
+                                onShowReactions = { reactionsFor = message.id },
                                 onOpenMedia = onOpenMedia,
                                 onRetry = {
                                     FakeChatStore.setStatus(convo, message.id, MessageStatus.Sending)
@@ -747,6 +751,21 @@ fun ChatScreen(
             })
             Spacer(Modifier.size(10.dp))
             SheetButton("Cancel", PayraColors.Primary, onClick = { showBlock = false })
+        }
+
+        // Who reacted
+        val reactionTarget = convo.messages.firstOrNull { it.id == reactionsFor }
+        LaunchedEffect(reactionTarget?.reactions?.size) {
+            if (reactionsFor != null && (reactionTarget == null || reactionTarget.reactions.isEmpty())) reactionsFor = null
+        }
+        BottomSheetOverlay(visible = reactionsFor != null, onDismiss = { reactionsFor = null }) {
+            if (reactionTarget != null) {
+                ReactionsList(
+                    reactions = reactionTarget.reactions,
+                    contact = convo.contact,
+                    onRemoveMine = { emoji -> FakeChatStore.toggleReaction(convo, reactionTarget.id, emoji) },
+                )
+            }
         }
 
         // Full emoji list for reactions
@@ -963,6 +982,7 @@ private fun LazyItemScope.MessageRow(
     onSwipeReply: () -> Unit,
     onQuoteClick: (Long) -> Unit,
     onReact: (String) -> Unit,
+    onShowReactions: () -> Unit,
     onOpenMedia: (MediaItem) -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -1117,7 +1137,7 @@ private fun LazyItemScope.MessageRow(
                 ) {
                     ReactionChips(
                         reactions = message.reactions,
-                        onTap = onReact,
+                        onTap = { onShowReactions() },
                         modifier = Modifier.padding(start = 10.dp, end = 10.dp).offset(y = (-10).dp),
                     )
                 }

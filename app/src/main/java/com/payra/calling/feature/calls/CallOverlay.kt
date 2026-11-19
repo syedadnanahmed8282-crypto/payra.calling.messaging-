@@ -349,7 +349,7 @@ private fun BarContent() {
         label = "barPulse",
     )
     val status = when (CallManager.phase) {
-        CallPhase.Connected -> "${CallManager.seconds / 60}:${(CallManager.seconds % 60).toString().padStart(2, '0')}"
+        CallPhase.Connected -> if (CallManager.poorConnection) "Poor connection" else "${CallManager.seconds / 60}:${(CallManager.seconds % 60).toString().padStart(2, '0')}"
         CallPhase.Calling -> "Calling..."
         CallPhase.Ringing -> "Ringing..."
         CallPhase.IncomingRinging -> "Incoming call"

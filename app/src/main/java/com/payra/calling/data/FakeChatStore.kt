@@ -34,6 +34,9 @@ object FakeChatStore {
 
     val downloads = androidx.compose.runtime.mutableStateMapOf<Long, DownloadInfo>()
 
+    /** Lists that already showed their loading skeleton once in this run of the app. */
+    val loadedScreens = mutableSetOf<String>()
+
     private var nextId = 1L
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var demoReplyIndex = 0

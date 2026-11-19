@@ -69,7 +69,7 @@ fun AvatarCircle(
     modifier: Modifier = Modifier,
     imageUri: String = "",
     blocked: Boolean = false,
-    round: Boolean = false,
+    round: Boolean = true,
 ) {
     Box(modifier = modifier.size(size)) {
     Box(

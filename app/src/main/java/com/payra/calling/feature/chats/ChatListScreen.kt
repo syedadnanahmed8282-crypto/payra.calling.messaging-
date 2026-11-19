@@ -1,5 +1,11 @@
 package com.payra.calling.feature.chats
 
+import com.payra.calling.designsystem.SkeletonList
+import com.payra.calling.data.NetworkMonitor
+import com.payra.calling.data.NetState
+import androidx.compose.animation.AnimatedVisibility
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -72,6 +78,14 @@ fun ChatListScreen(
 ) {
     val haptics = LocalHapticFeedback.current
     var query by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf("chats" !in FakeChatStore.loadedScreens) }
+    LaunchedEffect(Unit) {
+        if (loading) {
+            delay(900)
+            FakeChatStore.loadedScreens.add("chats")
+            loading = false
+        }
+    }
     val visible = FakeChatStore.conversations
         .filter { !it.archived }
         .filter { c ->
@@ -103,6 +117,15 @@ fun ChatListScreen(
                 )
                 GlassCircleButton(icon = Icons.Outlined.Add, contentDescription = "New chat", onClick = onNewChat)
             }
+            AnimatedVisibility(visible = NetworkMonitor.state != NetState.Online) {
+                Text(
+                    text = if (NetworkMonitor.state == NetState.Offline) "Waiting for network..." else "Connecting...",
+                    color = if (NetworkMonitor.state == NetState.Offline) PayraColors.Danger else PayraColors.Primary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 2.dp, top = 2.dp),
+                )
+            }
             Spacer(Modifier.height(16.dp))
             GlassSearchField(
                 value = query,
@@ -112,7 +135,9 @@ fun ChatListScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            if (visible.isEmpty() && query.isNotBlank()) {
+            if (loading) {
+                GlassSurface(modifier = Modifier.fillMaxSize()) { SkeletonList() }
+            } else if (visible.isEmpty() && query.isNotBlank()) {
                 EmptyState(icon = Icons.Outlined.Search, title = "No results", subtitle = "Try a different name or word")
             } else if (visible.isEmpty() && archivedCount == 0) {
                 EmptyChats(onNewChat)

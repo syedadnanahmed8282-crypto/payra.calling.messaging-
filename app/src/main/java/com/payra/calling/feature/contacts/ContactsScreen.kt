@@ -48,6 +48,14 @@ fun ContactsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
     val people = if (query.isBlank()) FakeChatStore.contacts.toList() else FakeChatStore.contacts.filter { it.name.contains(query, ignoreCase = true) }
+    var loading by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("contacts" !in FakeChatStore.loadedScreens) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (loading) {
+            kotlinx.coroutines.delay(900)
+            FakeChatStore.loadedScreens.add("contacts")
+            loading = false
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,7 +93,9 @@ fun ContactsScreen(
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(start = 12.dp, bottom = 10.dp).enterFromBottom(3),
         )
-        if (people.isEmpty()) {
+        if (loading) {
+            GlassSurface(modifier = Modifier.fillMaxSize()) { com.payra.calling.designsystem.SkeletonList() }
+        } else if (people.isEmpty()) {
             EmptyState(
                 icon = Icons.Outlined.Search,
                 title = if (query.isBlank()) "No contacts yet" else "No results",

@@ -1,5 +1,6 @@
 package com.payra.calling.feature.calls
 
+import androidx.compose.material.icons.outlined.ErrorOutline
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -144,7 +145,7 @@ fun CallScreen(onMinimize: () -> Unit, onClose: () -> Unit, onMessage: (String) 
             controlsVisible = false
         }
     }
-    val showControls = controlsVisible || phase != CallPhase.Connected
+    val showControls = (controlsVisible || phase != CallPhase.Connected) && !CallManager.inPip
 
     // When the call is over and has closed itself, leave this screen.
     LaunchedEffect(CallManager.active) {
@@ -364,6 +365,7 @@ private fun ActiveCallLayout(
                 Text(contact.name, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 StatusLine(phase = phase, video = false)
+                PoorConnectionChip(modifier = Modifier.padding(top = 10.dp))
             }
         }
 
@@ -394,6 +396,7 @@ private fun ActiveCallLayout(
                     Column(horizontalAlignment = Alignment.End) {
                         Text(contact.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         StatusLine(phase = phase, video = true)
+                        PoorConnectionChip(modifier = Modifier.padding(top = 6.dp))
                     }
                 }
             }
@@ -739,5 +742,29 @@ private fun RoundCallButton(
             Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size((size * 0.42f).dp))
         }
         Text(label, color = Color.White, fontSize = 14.sp)
+    }
+}
+
+
+/** "Poor connection" notice while the line is weak. */
+@Composable
+private fun PoorConnectionChip(modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = CallManager.poorConnection && CallManager.isConnected,
+        modifier = modifier,
+        enter = fadeIn(tween(220)),
+        exit = fadeOut(tween(220)),
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0x33FFB020))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = Color(0xFFFFD27A), modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Poor connection", color = Color(0xFFFFD27A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }

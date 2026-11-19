@@ -760,7 +760,11 @@ fun BubbleBody(
                 QuoteBlock(reply = reply, sent = sent, onClick = { onQuoteClick(reply.messageId) })
             }
             when (message.kind) {
-                MessageKind.Text -> LinkedText(message.text, fg, sent)
+                MessageKind.Text -> Column {
+                    LinkedText(message.text, fg, sent)
+                    val firstLink = remember(message.text) { message.text.findUrls().firstOrNull() }
+                    if (firstLink != null) LinkPreviewCard(firstLink, sent)
+                }
                 MessageKind.Image, MessageKind.Video -> {
                     Box {
                         MediaGrid(message.media, onOpen = onOpenMedia)

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mail
+import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -293,6 +294,7 @@ fun AccountSettingsScreen(
     onBack: () -> Unit,
     onOpenPassword: () -> Unit = {},
     onOpenGmail: () -> Unit = {},
+    onOpenPhone: () -> Unit = {},
     onDeleted: () -> Unit = {},
 ) {
     var showDelete by remember { mutableStateOf(false) }
@@ -334,7 +336,7 @@ fun AccountSettingsScreen(
         GlassSurface(modifier = Modifier.fillMaxWidth().enterFromBottom(0)) {
             Column {
                 SectionLabel("SIGN-IN")
-                ValueRow("Phone number", "+880 1XXX XXXXXX")
+                ValueRow("Phone number", "+880 1XXX XXXXXX  ›", onClick = onOpenPhone)
                 ValueRow("Change password", "›", onClick = onOpenPassword)
             }
         }
@@ -383,6 +385,50 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                         current.isBlank() -> error = "Enter your current password."
                         next.length < 8 -> error = "The new password needs 8 or more characters."
                         next != again -> error = "The two new passwords are different."
+                        else -> {
+                            error = ""
+                            done = true
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** Change the phone number you sign in with (confirmed with your password, no code needed). */
+@Composable
+fun ChangePhoneScreen(onBack: () -> Unit) {
+    var phone by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    var done by remember { mutableStateOf(false) }
+
+    SettingsSub("Change phone number", onBack) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                "Your chats and contacts stay the same. Confirm with your password.",
+                color = PayraColors.Muted,
+                fontSize = 14.sp,
+                modifier = Modifier.enterFromBottom(0),
+            )
+            GlassField("+880 1XXX XXXXXX", {}, "Current number", Icons.Outlined.Phone, modifier = Modifier.enterFromBottom(1))
+            GlassField(phone, { phone = it; error = ""; done = false }, "New phone number", Icons.Outlined.Phone, keyboardType = KeyboardType.Phone, modifier = Modifier.enterFromBottom(2))
+            GlassField(password, { password = it; error = "" }, "Password", Icons.Outlined.Lock, isPassword = true, modifier = Modifier.enterFromBottom(3))
+            AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                ErrorText(error)
+            }
+            AnimatedVisibility(visible = done, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                InfoBanner("Number changed. (Demo only until the server is connected.)")
+            }
+            PayraPrimaryButton(
+                text = "Change number",
+                modifier = Modifier.enterFromBottom(4),
+                onClick = {
+                    val digits = phone.count { it.isDigit() }
+                    when {
+                        digits < 10 || digits > 15 -> error = "Enter a valid phone number."
+                        password.isBlank() -> error = "Enter your password to confirm."
                         else -> {
                             error = ""
                             done = true

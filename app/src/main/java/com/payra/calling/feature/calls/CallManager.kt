@@ -34,10 +34,20 @@ object CallManager {
     var seconds by mutableIntStateOf(0)
         private set
 
+    /** Demo only: pretends the line gets weak for a few seconds (the real signal comes from Agora later). */
+    var poorConnection by mutableStateOf(false)
+        private set
+
     var muted by mutableStateOf(false)
     var speaker by mutableStateOf(false)
     var camOff by mutableStateOf(false)
     var frontCamera by mutableStateOf(true)
+
+    /** True while the app is shown in Android's picture-in-picture window (after pressing Home during a call). */
+    var inPip by mutableStateOf(false)
+
+    /** Set when the app is leaving the screen during a call, so the call screen opens before the small window appears. */
+    var pipRequested by mutableStateOf(false)
 
     /** Video call: true = you are the big picture and the other person is small. */
     var swapped by mutableStateOf(false)
@@ -135,6 +145,7 @@ object CallManager {
 
     /** Close the finished-call screen right away. */
     fun close() {
+        SelfCamera.release()
         closeJob?.cancel()
         active = false
         minimized = false
@@ -157,11 +168,14 @@ object CallManager {
             while (true) {
                 delay(1000)
                 seconds++
+                poorConnection = seconds in 15..20
             }
         }
     }
 
     private fun finish(connected: Boolean, label: CallPhase) {
+        poorConnection = false
+        SelfCamera.release()
         scriptJob?.cancel()
         tickJob?.cancel()
         if (connected) {

@@ -66,6 +66,7 @@ object SettingsRoutes {
     const val HELP = "help"
     const val ABOUT = "about"
     const val PASSWORD = "password"
+    const val PHONE = "phone"
     const val GMAIL = "gmail"
 }
 

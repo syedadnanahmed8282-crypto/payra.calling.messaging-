@@ -1,5 +1,12 @@
 package com.payra.calling.navigation
 
+import com.payra.calling.feature.settings.ChangePhoneScreen
+import com.payra.calling.feature.media.MediaPreviewScreen
+import com.payra.calling.designsystem.ConnectionBanner
+import com.payra.calling.data.NetworkMonitor
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.padding
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -11,10 +18,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -81,6 +90,7 @@ object Routes {
     const val EDIT_PROFILE = "edit_profile"
     const val MEDIA_VIEWER = "media_viewer?uri={uri}&video={video}&dur={dur}&tone={tone}&title={title}"
     const val CROP = "crop/{kind}?uri={uri}"
+    const val MEDIA_PREVIEW = "media_preview/{contactId}?items={items}"
     const val PICKER = "picker/{contactId}"
     const val CONTACT_PICKER = "contact_picker/{contactId}"
     const val SHARE_LOCATION = "share_location/{contactId}"
@@ -98,6 +108,10 @@ object Routes {
     fun mediaViewer(item: MediaItem, title: String) =
         "media_viewer?uri=${Uri.encode(item.uri)}&video=${item.isVideo}&dur=${Uri.encode(item.duration)}&tone=${item.tone}&title=${Uri.encode(title)}"
     fun crop(kind: String, uri: String) = "crop/$kind?uri=${Uri.encode(uri)}"
+    fun mediaPreview(contactId: String, items: List<MediaItem>) =
+        "media_preview/$contactId?items=" + Uri.encode(
+            items.joinToString(",") { Uri.encode("${it.isVideo}~${Uri.encode(it.duration)}~${Uri.encode(it.uri)}") },
+        )
     fun picker(contactId: String) = "picker/$contactId"
     fun contactPicker(contactId: String) = "contact_picker/$contactId"
     fun shareLocation(contactId: String) = "share_location/$contactId"
@@ -111,10 +125,20 @@ object Routes {
 private fun decodeIfNeeded(value: String): String =
     if (value.startsWith("content%3A") || value.startsWith("file%3A") || value.startsWith("http%3A") || value.startsWith("https%3A") || value.contains("%2F") || value.contains("%20")) Uri.decode(value) else value
 
+/** Turns the "items" argument of the preview screen back into pictures / videos. */
+private fun decodePreviewItems(raw: String): List<MediaItem> {
+    val joined = if (raw.contains("%2C") && !raw.contains(",")) Uri.decode(raw) else raw
+    return joined.split(",").filter { it.isNotBlank() }.mapNotNull { token ->
+        val parts = Uri.decode(token).split("~", limit = 3)
+        if (parts.size < 3) null else MediaItem(0, parts[0] == "true", Uri.decode(parts[1]), Uri.decode(parts[2]))
+    }
+}
+
 @Composable
 fun PayraNavHost() {
     val nav = rememberNavController()
     val context = LocalContext.current
+    LaunchedEffect(Unit) { NetworkMonitor.start(context.applicationContext) }
     val slide = tween<IntOffset>(Motion.ScreenMillis, easing = FastOutSlowInEasing)
 
     // Clears the whole back stack, so "Back" never returns to login after signing in.
@@ -153,6 +177,15 @@ fun PayraNavHost() {
         val id = send()
         FakeChatStore.simulateDelivery(convo, id, 2200L)
         nav.popBackStack()
+    }
+
+    // The app is leaving the screen during a call: show the call screen so the small window shows the call.
+    val pipRequested = CallManager.pipRequested
+    LaunchedEffect(pipRequested) {
+        if (pipRequested && CallManager.active) {
+            CallManager.minimized = false
+            if (nav.currentDestination?.route != Routes.CALL) nav.navigate(Routes.CALL) { launchSingleTop = true }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -238,6 +271,7 @@ fun PayraNavHost() {
                     onOpenSearch = { nav.navigate(Routes.chatSearch(contactId)) },
                     onOpenSharedMedia = { nav.navigate(Routes.sharedMedia(contactId)) },
                     onOpenWallpaper = { nav.navigate(Routes.wallpaperChat(contactId)) },
+                    onPreviewMedia = { items -> nav.navigate(Routes.mediaPreview(contactId, items)) },
                 )
             }
             composable(
@@ -373,8 +407,27 @@ fun PayraNavHost() {
                 val contactId = entry.arguments?.getString("contactId").orEmpty()
                 MediaPickerScreen(
                     onBack = { nav.popBackStack() },
-                    onSend = { media ->
-                        sendAndFinish(contactId) { FakeChatStore.sendMedia(FakeChatStore.conversationFor(contactId), media).id }
+                    onSend = { media -> nav.navigate(Routes.mediaPreview(contactId, media)) },
+                )
+            }
+            composable(
+                route = Routes.MEDIA_PREVIEW,
+                arguments = listOf(
+                    navArgument("contactId") { type = NavType.StringType },
+                    navArgument("items") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                val contactId = entry.arguments?.getString("contactId").orEmpty()
+                val initial = remember(entry) { decodePreviewItems(entry.arguments?.getString("items").orEmpty()) }
+                MediaPreviewScreen(
+                    initial = initial,
+                    onBack = { nav.popBackStack() },
+                    onSend = { items, caption ->
+                        val convo = FakeChatStore.conversationFor(contactId)
+                        val message = FakeChatStore.sendMedia(convo, items, caption)
+                        FakeChatStore.simulateDelivery(convo, message.id, 2200L)
+                        // back to the chat (also closes the gallery picker that was opened before)
+                        if (!nav.popBackStack(Routes.CHAT, false)) nav.popBackStack()
                     },
                 )
             }
@@ -412,9 +465,11 @@ fun PayraNavHost() {
                         onBack = back,
                         onOpenPassword = { nav.navigate(Routes.setting(SettingsRoutes.PASSWORD)) },
                         onOpenGmail = { nav.navigate(Routes.setting(SettingsRoutes.GMAIL)) },
+                        onOpenPhone = { nav.navigate(Routes.setting(SettingsRoutes.PHONE)) },
                         onDeleted = goLogin,
                     )
                     SettingsRoutes.PASSWORD -> ChangePasswordScreen(back)
+                    SettingsRoutes.PHONE -> ChangePhoneScreen(back)
                     SettingsRoutes.GMAIL -> LinkGmailScreen(back)
                     SettingsRoutes.PRIVACY -> PrivacySettingsScreen(back, onOpenBlocked = { nav.navigate(Routes.setting(SettingsRoutes.BLOCKED)) })
                     SettingsRoutes.BLOCKED -> BlockedContactsScreen(back)
@@ -437,5 +492,8 @@ fun PayraNavHost() {
             },
             modifier = Modifier.align(Alignment.TopStart),
         )
+
+        // No internet / connecting notice
+        ConnectionBanner(modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 4.dp))
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -79,6 +80,8 @@ import com.payra.calling.designsystem.PayraImage
 import com.payra.calling.designsystem.PayraImageLoader
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import com.payra.calling.designsystem.bouncyClick
@@ -133,13 +136,13 @@ fun ProfileScreen(
                     drawRect(PayraColors.Background)
                     val topCenter = Offset(size.width / 2f, 0f)
                     drawCircle(
-                        brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.40f), Color.Transparent), center = topCenter, radius = size.width * 1.0f),
+                        brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.60f), Color.Transparent), center = topCenter, radius = size.width * 1.0f),
                         radius = size.width * 1.0f,
                         center = topCenter,
                     )
                     val mid = Offset(size.width / 2f, size.height * 0.55f)
                     drawCircle(
-                        brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent), center = mid, radius = size.width * 1.1f),
+                        brush = Brush.radialGradient(listOf(accent.copy(alpha = 0.30f), Color.Transparent), center = mid, radius = size.width * 1.1f),
                         radius = size.width * 1.1f,
                         center = mid,
                     )
@@ -163,15 +166,16 @@ fun ProfileScreen(
                     }
                 }
                 // Profile photo: a big, softly rounded square, half over the cover (tap to see it full screen)
-                Box(modifier = Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.TopCenter) {
+                Box(modifier = Modifier.fillMaxWidth().height(62.dp), contentAlignment = Alignment.TopCenter) {
                     Box(
                         modifier = Modifier
-                            .offset(y = (-68).dp)
-                            .size(136.dp)
+                            .offset(y = (-62).dp)
+                            // requiredSize: the holder above is only 62 dp tall, a plain size() would squash the photo into a pill
+                            .requiredSize(124.dp)
                             .popIn()
-                            .clip(RoundedCornerShape(28.dp))
+                            .clip(RoundedCornerShape(32.dp))
                             .background(accent)
-                            .border(4.dp, PayraColors.Background, RoundedCornerShape(28.dp))
+                            .border(4.dp, PayraColors.Background, RoundedCornerShape(32.dp))
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 if (contact.avatarUri.isNotEmpty()) onViewImage(MediaItem(0, false, "", contact.avatarUri), "Profile photo")
                             },
@@ -459,33 +463,40 @@ private fun ActionCircle(icon: ImageVector, label: String, tint: Color, onClick:
 
 
 /**
- * Soft blurred background made from the cover picture (or the profile photo): a tiny copy of the picture stretched
- * over the whole screen gives a smooth blur on every Android version, then a gentle wash keeps the text readable.
+ * Strongly blurred, colourful background made from the cover picture (or the profile photo). A tiny copy of the
+ * picture is stretched over the whole screen (very smooth blur on every Android version) and its colours are boosted.
+ * Without a picture the contact's colour fills the top instead. Only the lower part gets a light wash so cards stay readable.
  */
 @Composable
 private fun ProfileBackdrop(uri: String, accent: Color) {
-    if (uri.isEmpty()) return
     val context = LocalContext.current
-    val request = remember(uri) { ImageRequest.Builder(context).data(uri).size(28).crossfade(true).build() }
     Box(modifier = Modifier.fillMaxSize()) {
-        AsyncImage(
-            model = request,
-            imageLoader = PayraImageLoader.get(context),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            filterQuality = FilterQuality.Medium,
-        )
+        if (uri.isNotEmpty()) {
+            val request = remember(uri) { ImageRequest.Builder(context).data(uri).size(12).crossfade(true).build() }
+            AsyncImage(
+                model = request,
+                imageLoader = PayraImageLoader.get(context),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.High,
+                colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1.9f) }),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.85f), accent.copy(alpha = 0.45f), accent.copy(alpha = 0.18f)))),
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            accent.copy(alpha = 0.18f),
-                            PayraColors.Background.copy(alpha = 0.58f),
-                            PayraColors.Background.copy(alpha = 0.80f),
-                        ),
+                        0f to Color.Transparent,
+                        0.45f to PayraColors.Background.copy(alpha = 0.10f),
+                        1f to PayraColors.Background.copy(alpha = 0.50f),
                     ),
                 ),
         )
