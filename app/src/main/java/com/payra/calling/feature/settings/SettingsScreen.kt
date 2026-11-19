@@ -67,6 +67,10 @@ object SettingsRoutes {
     const val ABOUT = "about"
     const val PASSWORD = "password"
     const val PHONE = "phone"
+    const val FAQ = "faq"
+    const val REPORT = "report"
+    const val TERMS = "terms"
+    const val POLICY = "policy"
     const val GMAIL = "gmail"
 }
 

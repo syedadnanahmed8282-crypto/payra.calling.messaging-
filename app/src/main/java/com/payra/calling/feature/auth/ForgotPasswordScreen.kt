@@ -49,6 +49,7 @@ import com.payra.calling.designsystem.popIn
 fun ForgotPasswordScreen(onBack: () -> Unit) {
     var phone by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     GlowBackground {
         Column(
@@ -108,7 +109,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
                 ) {
                     InfoBanner("If a Gmail is linked to this number, a reset link is on its way.")
                 }
-                TextLink("No Gmail linked? Contact support", onClick = {}, modifier = Modifier.enterFromBottom(5))
+                TextLink("No Gmail linked? Contact support", onClick = { com.payra.calling.designsystem.emailSupport(context, "Account recovery help", "Hello Payra support,\n\nI cannot recover my account because no Gmail is linked.\nMy phone number: ") }, modifier = Modifier.enterFromBottom(5))
             }
         }
     }

@@ -167,6 +167,11 @@ fun ChatScreen(
     val convo = remember(contactId) { FakeChatStore.conversationFor(contactId) }
     val isBlocked = FakeChatStore.isBlocked(convo.contact.id)
     val baselineId = remember(contactId) { convo.messages.lastOrNull()?.id ?: 0L }
+    // Unread messages when the chat was opened: a "3 unread messages" line is shown above the first one.
+    val unreadAtOpen = remember(contactId) { convo.unread }
+    val firstUnreadId = remember(contactId) {
+        if (unreadAtOpen > 0) convo.messages.filter { !it.sent }.takeLast(unreadAtOpen).firstOrNull()?.id else null
+    }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = convo.messages.size)
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -188,6 +193,7 @@ fun ChatScreen(
     var showBlock by remember { mutableStateOf(false) }
     var showReactionSheet by remember { mutableStateOf(false) }
     var reactionsFor by remember { mutableStateOf<Long?>(null) }
+    var infoFor by remember { mutableStateOf<Long?>(null) }
     var emojiOpen by remember { mutableStateOf(false) }
     var callExpanded by remember { mutableStateOf(false) }
     var lastSpot by remember { mutableStateOf<SelectedSpot?>(null) }
@@ -230,11 +236,12 @@ fun ChatScreen(
 
     BackHandler(
         enabled = selecting || showAttach || showDelete || showMenu || showClear || showBlock ||
-            showReactionSheet || reactionsFor != null || emojiOpen || callExpanded || bannerMessage != null,
+            showReactionSheet || reactionsFor != null || infoFor != null || emojiOpen || callExpanded || bannerMessage != null,
     ) {
         when {
             showReactionSheet -> showReactionSheet = false
             reactionsFor != null -> reactionsFor = null
+            infoFor != null -> infoFor = null
             showDelete -> showDelete = false
             showClear -> showClear = false
             showBlock -> showBlock = false
@@ -354,6 +361,7 @@ fun ChatScreen(
     }
 
     val canReply = selectedMessages.size == 1 && !selectedMessages[0].deleted
+    val canInfo = selectedMessages.size == 1 && !selectedMessages[0].deleted
     val canEdit = selectedMessages.size == 1 && selectedMessages[0].sent &&
         !selectedMessages[0].deleted && selectedMessages[0].kind == MessageKind.Text
     val canDeleteForEveryone = selectedMessages.isNotEmpty() && selectedMessages.all { it.sent && !it.deleted }
@@ -439,6 +447,14 @@ fun ChatScreen(
                             SelectionActionBar(
                                 canReply = canReply,
                                 canEdit = canEdit,
+                                onInfo = if (canInfo) {
+                                    {
+                                        infoFor = selectedMessages.firstOrNull()?.id
+                                        selected.clear()
+                                    }
+                                } else {
+                                    null
+                                },
                                 onReply = {
                                     replyTarget = selectedMessages.firstOrNull()
                                     editTarget = null
@@ -562,6 +578,7 @@ fun ChatScreen(
                                 },
                                 onReact = { emoji -> FakeChatStore.toggleReaction(convo, message.id, emoji) },
                                 onShowReactions = { reactionsFor = message.id },
+                                unreadCount = if (message.id == firstUnreadId) unreadAtOpen else 0,
                                 onOpenMedia = onOpenMedia,
                                 onRetry = {
                                     FakeChatStore.setStatus(convo, message.id, MessageStatus.Sending)
@@ -751,6 +768,12 @@ fun ChatScreen(
             })
             Spacer(Modifier.size(10.dp))
             SheetButton("Cancel", PayraColors.Primary, onClick = { showBlock = false })
+        }
+
+        // Message info
+        val infoTarget = convo.messages.firstOrNull { it.id == infoFor }
+        BottomSheetOverlay(visible = infoFor != null, onDismiss = { infoFor = null }) {
+            if (infoTarget != null) MessageInfoContent(infoTarget, convo.contact.name)
         }
 
         // Who reacted
@@ -983,6 +1006,7 @@ private fun LazyItemScope.MessageRow(
     onQuoteClick: (Long) -> Unit,
     onReact: (String) -> Unit,
     onShowReactions: () -> Unit,
+    unreadCount: Int,
     onOpenMedia: (MediaItem) -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -999,9 +1023,10 @@ private fun LazyItemScope.MessageRow(
     val sent = message.sent
     val heartEmoji = "\u2764\uFE0F"
 
+    Column(modifier = Modifier.animateItem().fillMaxWidth()) {
+    if (unreadCount > 0) UnreadDivider(unreadCount)
     Row(
         modifier = Modifier
-            .animateItem()
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(highlight)
@@ -1144,6 +1169,7 @@ private fun LazyItemScope.MessageRow(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -1191,6 +1217,23 @@ private fun BlockedBar(name: String, onUnblock: () -> Unit) {
             ) {
                 Text("Unblock", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
+        }
+    }
+}
+
+
+/** "3 unread messages" line above the first message you had not read yet. */
+@Composable
+private fun UnreadDivider(count: Int) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+        GlassSurface(shape = PayraShapes.Pill, fillAlpha = 0.7f) {
+            Text(
+                text = if (count == 1) "1 unread message" else "$count unread messages",
+                color = PayraColors.Primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            )
         }
     }
 }

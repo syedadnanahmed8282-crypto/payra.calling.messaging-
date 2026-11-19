@@ -1,5 +1,13 @@
 package com.payra.calling.navigation
 
+import com.payra.calling.feature.settings.LegalKind
+import com.payra.calling.feature.settings.LegalScreen
+import com.payra.calling.feature.settings.ReportProblemScreen
+import com.payra.calling.feature.settings.FaqScreen
+import com.payra.calling.feature.share.ShareTargetScreen
+import com.payra.calling.data.ShareInbox
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.runtime.getValue
 import com.payra.calling.feature.settings.ChangePhoneScreen
 import com.payra.calling.feature.media.MediaPreviewScreen
 import com.payra.calling.designsystem.ConnectionBanner
@@ -91,6 +99,7 @@ object Routes {
     const val MEDIA_VIEWER = "media_viewer?uri={uri}&video={video}&dur={dur}&tone={tone}&title={title}"
     const val CROP = "crop/{kind}?uri={uri}"
     const val MEDIA_PREVIEW = "media_preview/{contactId}?items={items}"
+    const val SHARE_TARGET = "share_target"
     const val PICKER = "picker/{contactId}"
     const val CONTACT_PICKER = "contact_picker/{contactId}"
     const val SHARE_LOCATION = "share_location/{contactId}"
@@ -177,6 +186,20 @@ fun PayraNavHost() {
         val id = send()
         FakeChatStore.simulateDelivery(convo, id, 2200L)
         nav.popBackStack()
+    }
+
+    // Something was shared to Payra from another app: let the person pick a chat (only after login)
+    val backEntry by nav.currentBackStackEntryAsState()
+    val currentRoute = backEntry?.destination?.route
+    val sharePending = ShareInbox.pending
+    LaunchedEffect(sharePending, currentRoute) {
+        val authRoutes = setOf(
+            Routes.SPLASH, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.PROFILE_SETUP,
+            Routes.PERMISSION_CONTACTS, Routes.PERMISSION_MEDIA, Routes.PERMISSION_NOTIFICATIONS,
+        )
+        if (sharePending != null && currentRoute != null && currentRoute !in authRoutes && currentRoute != Routes.SHARE_TARGET) {
+            nav.navigate(Routes.SHARE_TARGET) { launchSingleTop = true }
+        }
     }
 
     // The app is leaving the screen during a call: show the call screen so the small window shows the call.
@@ -431,6 +454,36 @@ fun PayraNavHost() {
                     },
                 )
             }
+            composable(Routes.SHARE_TARGET) {
+                val payload = ShareInbox.pending
+                if (payload == null) {
+                    LaunchedEffect(Unit) { nav.popBackStack() }
+                } else {
+                    ShareTargetScreen(
+                        payload = payload,
+                        onBack = {
+                            ShareInbox.pending = null
+                            nav.popBackStack()
+                        },
+                        onPick = { id ->
+                            val convo = FakeChatStore.conversationFor(id)
+                            if (payload.text.isNotBlank()) {
+                                val m = FakeChatStore.send(convo, payload.text)
+                                FakeChatStore.simulateDelivery(convo, m.id, 1500L)
+                            }
+                            payload.files.forEach { file ->
+                                val m = FakeChatStore.sendFile(convo, file.name, file.info, file.uri)
+                                FakeChatStore.simulateDelivery(convo, m.id, 2200L)
+                            }
+                            val items = payload.items
+                            ShareInbox.pending = null
+                            nav.popBackStack()
+                            nav.navigate(Routes.chat(id))
+                            if (items.isNotEmpty()) nav.navigate(Routes.mediaPreview(id, items))
+                        },
+                    )
+                }
+            }
             composable(
                 route = Routes.CONTACT_PICKER,
                 arguments = listOf(navArgument("contactId") { type = NavType.StringType }),
@@ -479,7 +532,17 @@ fun PayraNavHost() {
                     SettingsRoutes.APPEARANCE -> AppearanceSettingsScreen(back, onOpenWallpaper = { nav.navigate(Routes.WALLPAPER) })
                     SettingsRoutes.LANGUAGE -> LanguageSettingsScreen(back)
                     SettingsRoutes.ABOUT -> AboutSettingsScreen(back)
-                    else -> HelpSettingsScreen(back)
+                    SettingsRoutes.FAQ -> FaqScreen(back)
+                    SettingsRoutes.REPORT -> ReportProblemScreen(back)
+                    SettingsRoutes.TERMS -> LegalScreen(LegalKind.Terms, back)
+                    SettingsRoutes.POLICY -> LegalScreen(LegalKind.Privacy, back)
+                    else -> HelpSettingsScreen(
+                        back,
+                        onOpenFaq = { nav.navigate(Routes.setting(SettingsRoutes.FAQ)) },
+                        onOpenReport = { nav.navigate(Routes.setting(SettingsRoutes.REPORT)) },
+                        onOpenTerms = { nav.navigate(Routes.setting(SettingsRoutes.TERMS)) },
+                        onOpenPolicy = { nav.navigate(Routes.setting(SettingsRoutes.POLICY)) },
+                    )
                 }
             }
         }

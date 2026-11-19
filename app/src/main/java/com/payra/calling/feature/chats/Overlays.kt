@@ -1,5 +1,6 @@
 package com.payra.calling.feature.chats
 
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -149,14 +150,16 @@ fun SelectionActionBar(
     onForward: () -> Unit,
     onCopy: () -> Unit,
     onDelete: () -> Unit,
+    onInfo: (() -> Unit)? = null,
 ) {
     GlassSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         shape = RoundedCornerShape(32.dp),
     ) {
         Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
             if (canReply) ActionItem(Icons.AutoMirrored.Filled.Reply, "Reply", PayraColors.Ink, onReply, Modifier.weight(1f))
             if (canEdit) ActionItem(Icons.Outlined.Edit, "Edit", PayraColors.Ink, onEdit, Modifier.weight(1f))
+            if (onInfo != null) ActionItem(Icons.Outlined.Info, "Info", PayraColors.Ink, onInfo, Modifier.weight(1f))
             ActionItem(Icons.Outlined.Shortcut, "Forward", PayraColors.Ink, onForward, Modifier.weight(1f))
             ActionItem(Icons.Outlined.ContentCopy, "Copy", PayraColors.Ink, onCopy, Modifier.weight(1f))
             ActionItem(Icons.Outlined.Delete, "Delete", PayraColors.Danger, onDelete, Modifier.weight(1f))

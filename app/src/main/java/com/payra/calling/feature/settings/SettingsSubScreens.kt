@@ -560,13 +560,19 @@ fun AppearanceSettingsScreen(onBack: () -> Unit, onOpenWallpaper: () -> Unit) {
 
 /** Figma screen "46 Help". */
 @Composable
-fun HelpSettingsScreen(onBack: () -> Unit) {
+fun HelpSettingsScreen(
+    onBack: () -> Unit,
+    onOpenFaq: () -> Unit = {},
+    onOpenReport: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPolicy: () -> Unit = {},
+) {
     val context = LocalContext.current
     SettingsSub("Help", onBack) {
         GlassSurface(modifier = Modifier.fillMaxWidth().enterFromBottom(0)) {
             Column {
                 SectionLabel("SUPPORT")
-                ValueRow("FAQ", "›")
+                ValueRow("FAQ", "›", onClick = onOpenFaq)
                 ValueRow(
                     "Contact support", "›",
                     onClick = {
@@ -579,15 +585,15 @@ fun HelpSettingsScreen(onBack: () -> Unit) {
                         }
                     },
                 )
-                ValueRow("Report a problem", "›")
+                ValueRow("Report a problem", "›", onClick = onOpenReport)
             }
         }
         Spacer(Modifier.height(12.dp))
         GlassSurface(modifier = Modifier.fillMaxWidth().enterFromBottom(1)) {
             Column {
                 SectionLabel("LEGAL")
-                ValueRow("Terms of service", "›")
-                ValueRow("Privacy policy", "›")
+                ValueRow("Terms of service", "›", onClick = onOpenTerms)
+                ValueRow("Privacy policy", "›", onClick = onOpenPolicy)
             }
         }
     }
