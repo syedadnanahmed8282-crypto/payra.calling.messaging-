@@ -1,5 +1,11 @@
 package com.payra.calling.navigation
 
+import com.payra.calling.feature.auth.SetNewPasswordScreen
+import com.payra.calling.data.backend.ProfileRepo
+import com.payra.calling.data.backend.AuthLinks
+import com.payra.calling.data.backend.Auth
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.payra.calling.feature.settings.LegalKind
 import com.payra.calling.feature.settings.LegalScreen
 import com.payra.calling.feature.settings.ReportProblemScreen
@@ -100,6 +106,7 @@ object Routes {
     const val CROP = "crop/{kind}?uri={uri}"
     const val MEDIA_PREVIEW = "media_preview/{contactId}?items={items}"
     const val SHARE_TARGET = "share_target"
+    const val NEW_PASSWORD = "new_password"
     const val PICKER = "picker/{contactId}"
     const val CONTACT_PICKER = "contact_picker/{contactId}"
     const val SHARE_LOCATION = "share_location/{contactId}"
@@ -134,6 +141,12 @@ object Routes {
 private fun decodeIfNeeded(value: String): String =
     if (value.startsWith("content%3A") || value.startsWith("file%3A") || value.startsWith("http%3A") || value.startsWith("https%3A") || value.contains("%2F") || value.contains("%20")) Uri.decode(value) else value
 
+/** Screens that are shown while logged out. */
+private val LoggedOutRoutes = setOf(
+    Routes.SPLASH, Routes.LOGIN, Routes.REGISTER, Routes.FORGOT_PASSWORD, Routes.PROFILE_SETUP,
+    Routes.PERMISSION_CONTACTS, Routes.PERMISSION_MEDIA, Routes.PERMISSION_NOTIFICATIONS, Routes.NEW_PASSWORD,
+)
+
 /** Turns the "items" argument of the preview screen back into pictures / videos. */
 private fun decodePreviewItems(raw: String): List<MediaItem> {
     val joined = if (raw.contains("%2C") && !raw.contains(",")) Uri.decode(raw) else raw
@@ -148,6 +161,10 @@ fun PayraNavHost() {
     val nav = rememberNavController()
     val context = LocalContext.current
     LaunchedEffect(Unit) { NetworkMonitor.start(context.applicationContext) }
+    // Load the saved login before the first screen decides where to go
+    remember { Auth.init(context.applicationContext); 0 }
+    val navScope = rememberCoroutineScope()
+    LaunchedEffect(Auth.session?.userId) { if (Auth.isLoggedIn) ProfileRepo.loadMine() }
     val slide = tween<IntOffset>(Motion.ScreenMillis, easing = FastOutSlowInEasing)
 
     // Clears the whole back stack, so "Back" never returns to login after signing in.
@@ -188,6 +205,29 @@ fun PayraNavHost() {
         nav.popBackStack()
     }
 
+    // The login ended (logged out, account deleted, login expired): back to the login screen
+    LaunchedEffect(Auth.session) {
+        val route = nav.currentDestination?.route
+        if (Auth.session == null && route != null && route !in LoggedOutRoutes) goLogin()
+    }
+
+    // The person tapped a link in an e-mail (reset password / confirm Gmail)
+    val authLink = AuthLinks.pending
+    LaunchedEffect(authLink) {
+        if (authLink != null) {
+            if (authLink.type == "recovery") {
+                nav.navigate(Routes.NEW_PASSWORD) { launchSingleTop = true }
+            } else {
+                if (authLink.accessToken.isNotBlank() && Auth.adoptSession(authLink.accessToken, authLink.refreshToken)) {
+                    Toast.makeText(context, "Done! Your Gmail is linked.", Toast.LENGTH_LONG).show()
+                } else if (authLink.error.isNotBlank()) {
+                    Toast.makeText(context, "This link has expired. Please try again.", Toast.LENGTH_LONG).show()
+                }
+                AuthLinks.pending = null
+            }
+        }
+    }
+
     // Something was shared to Payra from another app: let the person pick a chat (only after login)
     val backEntry by nav.currentBackStackEntryAsState()
     val currentRoute = backEntry?.destination?.route
@@ -221,7 +261,10 @@ fun PayraNavHost() {
             popExitTransition = { slideOutHorizontally(animationSpec = slide) { w -> w / 4 } + fadeOut(tween(220)) },
         ) {
             composable(Routes.SPLASH) {
-                SplashScreen(onFinished = { nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } } })
+                SplashScreen(onFinished = {
+                    // logged in before? go straight in
+                    nav.navigate(if (Auth.isLoggedIn) Routes.HOME else Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } }
+                })
             }
             composable(Routes.LOGIN) {
                 LoginScreen(
@@ -262,7 +305,7 @@ fun PayraNavHost() {
                     onViewProfile = { contactId -> nav.navigate(Routes.profile(contactId, false)) },
                     onMyProfile = { nav.navigate(Routes.profile(FakeChatStore.me.id, true)) },
                     onOpenSetting = { name -> nav.navigate(Routes.setting(name)) },
-                    onLogout = goLogin,
+                    onLogout = { navScope.launch { Auth.signOut() } },
                     onNewContact = { nav.navigate(Routes.ADD_CONTACT) },
                     onOpenArchived = { nav.navigate(Routes.ARCHIVED) },
                 )
@@ -454,6 +497,25 @@ fun PayraNavHost() {
                     },
                 )
             }
+            composable(Routes.NEW_PASSWORD) {
+                val link = AuthLinks.pending
+                if (link == null) {
+                    LaunchedEffect(Unit) { nav.popBackStack() }
+                } else {
+                    SetNewPasswordScreen(
+                        link = link,
+                        onDone = {
+                            AuthLinks.pending = null
+                            navScope.launch { Auth.signOut() }
+                            goLogin()
+                        },
+                        onCancel = {
+                            AuthLinks.pending = null
+                            nav.popBackStack()
+                        },
+                    )
+                }
+            }
             composable(Routes.SHARE_TARGET) {
                 val payload = ShareInbox.pending
                 if (payload == null) {
@@ -519,7 +581,13 @@ fun PayraNavHost() {
                         onOpenPassword = { nav.navigate(Routes.setting(SettingsRoutes.PASSWORD)) },
                         onOpenGmail = { nav.navigate(Routes.setting(SettingsRoutes.GMAIL)) },
                         onOpenPhone = { nav.navigate(Routes.setting(SettingsRoutes.PHONE)) },
-                        onDeleted = goLogin,
+                        onDeleted = {
+                            navScope.launch {
+                                if (!Auth.deleteAccount()) {
+                                    Toast.makeText(context, "Could not delete your account right now. Check your connection and try again.", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
                     )
                     SettingsRoutes.PASSWORD -> ChangePasswordScreen(back)
                     SettingsRoutes.PHONE -> ChangePhoneScreen(back)

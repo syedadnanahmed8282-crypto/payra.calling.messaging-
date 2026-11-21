@@ -57,6 +57,18 @@ object FakeChatStore {
     /** The logged-in person (demo: the first contact). */
     val me: Contact get() = contacts.first()
 
+    /** Puts the name / about (and photos, when there are any) loaded from the server onto "me". */
+    fun applyServerProfile(name: String, about: String, avatar: String, cover: String) {
+        updateContact(me.id) {
+            it.copy(
+                name = name.ifBlank { it.name },
+                about = about.ifBlank { it.about },
+                avatarUri = if (avatar.isNotBlank()) avatar else it.avatarUri,
+                coverUri = if (cover.isNotBlank()) cover else it.coverUri,
+            )
+        }
+    }
+
     fun updateContact(id: String, transform: (Contact) -> Contact) {
         val index = contacts.indexOfFirst { it.id == id }
         if (index >= 0) contacts[index] = transform(contacts[index])

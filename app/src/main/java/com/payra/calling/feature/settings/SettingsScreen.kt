@@ -109,7 +109,7 @@ fun SettingsScreen(
                     Spacer(Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(me.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = PayraColors.Ink)
-                        Text("+880 1XXX XXXXXX", fontSize = 14.sp, color = PayraColors.Muted)
+                        Text(com.payra.calling.data.backend.Auth.session?.phone?.takeIf { it.isNotBlank() } ?: "+880 1XXX XXXXXX", fontSize = 14.sp, color = PayraColors.Muted)
                     }
                 }
             }

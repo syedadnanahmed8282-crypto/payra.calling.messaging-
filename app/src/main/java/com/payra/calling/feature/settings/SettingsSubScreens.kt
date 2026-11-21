@@ -365,6 +365,8 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
     var again by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var done by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     SettingsSub("Change password", onBack) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -375,10 +377,11 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                 ErrorText(error)
             }
             AnimatedVisibility(visible = done, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                InfoBanner("Password changed. (Demo only until the server is connected.)")
+                InfoBanner("Password changed.")
             }
             PayraPrimaryButton(
                 text = "Change password",
+                loading = loading,
                 modifier = Modifier.enterFromBottom(3),
                 onClick = {
                     when {
@@ -387,7 +390,16 @@ fun ChangePasswordScreen(onBack: () -> Unit) {
                         next != again -> error = "The two new passwords are different."
                         else -> {
                             error = ""
-                            done = true
+                            loading = true
+                            scope.launch {
+                                val result = com.payra.calling.data.backend.Auth.changePassword(current, next)
+                                loading = false
+                                if (result is com.payra.calling.data.backend.AuthResult.Error) {
+                                    error = result.message
+                                } else {
+                                    done = true
+                                }
+                            }
                         }
                     }
                 },
@@ -442,8 +454,11 @@ fun ChangePhoneScreen(onBack: () -> Unit) {
 
 @Composable
 fun LinkGmailScreen(onBack: () -> Unit) {
-    var email by remember { mutableStateOf("you@gmail.com") }
+    var email by remember { mutableStateOf(com.payra.calling.data.backend.Auth.session?.email.orEmpty()) }
     var sent by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     SettingsSub("Recovery Gmail", onBack) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
@@ -453,9 +468,33 @@ fun LinkGmailScreen(onBack: () -> Unit) {
                 modifier = Modifier.enterFromBottom(0),
             )
             GlassField(email, { email = it; sent = false }, "Gmail address", Icons.Outlined.Mail, keyboardType = KeyboardType.Email, modifier = Modifier.enterFromBottom(1))
-            PayraPrimaryButton(text = "Send verification link", modifier = Modifier.enterFromBottom(2), onClick = { if (email.contains("@")) sent = true })
+            AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                ErrorText(error)
+            }
+            PayraPrimaryButton(
+                text = "Send verification link",
+                loading = loading,
+                modifier = Modifier.enterFromBottom(2),
+                onClick = {
+                    if (!email.contains("@")) {
+                        error = "Enter a valid Gmail address."
+                    } else {
+                        loading = true
+                        error = ""
+                        scope.launch {
+                            val result = com.payra.calling.data.backend.Auth.linkEmail(email)
+                            loading = false
+                            if (result is com.payra.calling.data.backend.AuthResult.Error) {
+                                error = result.message
+                            } else {
+                                sent = true
+                            }
+                        }
+                    }
+                },
+            )
             AnimatedVisibility(visible = sent, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                InfoBanner("Check your Gmail and tap the link to finish. (Demo only until the server is connected.)")
+                InfoBanner("Check your Gmail and tap the link to finish linking it.")
             }
         }
     }

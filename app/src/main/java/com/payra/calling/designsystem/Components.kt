@@ -47,17 +47,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun PayraPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PayraPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, loading: Boolean = false) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .bouncyClick(onClick = onClick, pressedScale = 0.96f)
+            .graphicsLayer { alpha = if (loading) 0.75f else 1f }
+            .bouncyClick(onClick = { if (!loading) onClick() }, pressedScale = 0.96f)
             .clip(PayraShapes.Pill)
             .background(PayraColors.Primary)
             .padding(vertical = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        if (loading) {
+            BouncingDots(color = Color.White, dotSize = 7.dp)
+        } else {
+            Text(text, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 

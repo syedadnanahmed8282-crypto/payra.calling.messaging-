@@ -1,5 +1,6 @@
 package com.payra.calling.feature.auth
 
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -52,8 +53,10 @@ import com.payra.calling.designsystem.popIn
 /** Figma screen "7 Profile Setup". */
 @Composable
 fun ProfileSetupScreen(onFinish: () -> Unit) {
-    var name by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(com.payra.calling.data.backend.Auth.signupName) }
     var about by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val pulse = rememberInfiniteTransition(label = "badge")
     val badgeScale = pulse.animateFloat(
@@ -132,7 +135,23 @@ fun ProfileSetupScreen(onFinish: () -> Unit) {
                 leadingIcon = Icons.Outlined.ChatBubbleOutline,
                 modifier = Modifier.enterFromBottom(4),
             )
-            PayraPrimaryButton(text = "Finish", onClick = onFinish, modifier = Modifier.enterFromBottom(5))
+            PayraPrimaryButton(
+                text = "Finish",
+                loading = saving,
+                modifier = Modifier.enterFromBottom(5),
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        // best effort: a failed save never blocks the person (the name can be edited later)
+                        if (name.isNotBlank()) {
+                            com.payra.calling.data.backend.ProfileRepo.saveMine(name, about)
+                            com.payra.calling.data.FakeChatStore.applyServerProfile(name.trim(), about.trim(), "", "")
+                        }
+                        saving = false
+                        onFinish()
+                    }
+                },
+            )
             TextLink("Skip for now", onClick = onFinish, modifier = Modifier.enterFromBottom(6))
         }
     }

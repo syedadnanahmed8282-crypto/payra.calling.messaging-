@@ -1,5 +1,11 @@
 package com.payra.calling.feature.auth
 
+import com.payra.calling.data.backend.AuthResult
+import com.payra.calling.data.backend.Auth
+import kotlinx.coroutines.launch
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -56,6 +62,10 @@ fun RegisterScreen(
     var password by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var shakeCount by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     GlowBackground {
         Column(
@@ -112,24 +122,37 @@ fun RegisterScreen(
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
-                    ErrorText("Fill in every field. The password needs 8 or more characters.")
+                    ErrorText(errorText.ifBlank { "Fill in every field. The password needs 8 or more characters." })
                 }
             }
 
             PayraPrimaryButton(
                 text = "Create account",
                 modifier = Modifier.enterFromBottom(4),
+                loading = loading,
                 onClick = {
                     if (name.isBlank() || phone.isBlank() || password.length < 8) {
+                        errorText = "Fill in every field. The password needs 8 or more characters."
                         showError = true
                         shakeCount++
                     } else {
-                        onRegistered()
+                        loading = true
+                        scope.launch {
+                            val result = Auth.signUp(phone, password, name)
+                            loading = false
+                            if (result is AuthResult.Error) {
+                                errorText = result.message
+                                showError = true
+                                shakeCount++
+                            } else {
+                                onRegistered()
+                            }
+                        }
                     }
                 },
             )
             OrDivider(modifier = Modifier.enterFromBottom(5))
-            GoogleButton(onClick = onRegistered, modifier = Modifier.enterFromBottom(6))
+            GoogleButton(onClick = { Toast.makeText(context, "Google sign-in is coming very soon. Please use your phone number for now.", Toast.LENGTH_LONG).show() }, modifier = Modifier.enterFromBottom(6))
 
             Row(
                 modifier = Modifier.fillMaxWidth().enterFromBottom(7),

@@ -243,8 +243,8 @@ fun ProfileScreen(
 
                     val rows: List<Triple<ImageVector, String, String>> = if (isSelf) {
                         listOf(
-                            Triple(Icons.Outlined.Phone, "Phone", "+880 1XXX XXXXXX"),
-                            Triple(Icons.Outlined.Mail, "Email (Gmail)", "you@gmail.com"),
+                            Triple(Icons.Outlined.Phone, "Phone", com.payra.calling.data.backend.Auth.session?.phone?.takeIf { it.isNotBlank() } ?: "+880 1XXX XXXXXX"),
+                            Triple(Icons.Outlined.Mail, "Email (Gmail)", com.payra.calling.data.backend.Auth.session?.email?.takeIf { it.isNotBlank() } ?: "Not linked yet"),
                             Triple(Icons.Outlined.Info, "About", contact.about),
                         )
                     } else {

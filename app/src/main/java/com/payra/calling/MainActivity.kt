@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.payra.calling.data.ShareInbox
+import com.payra.calling.data.backend.AuthLinks
 import com.payra.calling.designsystem.PayraTheme
 import com.payra.calling.feature.calls.CallManager
 import com.payra.calling.navigation.PayraNavHost
@@ -19,7 +20,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) ShareInbox.handle(this, intent)
+        if (savedInstanceState == null) {
+            ShareInbox.handle(this, intent)
+            AuthLinks.handle(intent?.data)
+        }
         setContent {
             PayraTheme {
                 PayraNavHost()
@@ -32,6 +36,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         ShareInbox.handle(this, intent)
+        AuthLinks.handle(intent.data)
     }
 
     /** Pressing Home during a call: keep the call on screen in a small floating window over other apps. */

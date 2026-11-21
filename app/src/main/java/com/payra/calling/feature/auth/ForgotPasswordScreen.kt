@@ -1,5 +1,7 @@
 package com.payra.calling.feature.auth
 
+import com.payra.calling.designsystem.ErrorText
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -49,6 +51,9 @@ import com.payra.calling.designsystem.popIn
 fun ForgotPasswordScreen(onBack: () -> Unit) {
     var phone by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
 
     GlowBackground {
@@ -99,9 +104,25 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
                 )
                 PayraPrimaryButton(
                     text = "Send reset link",
-                    onClick = { if (phone.isNotBlank()) sent = true },
+                    loading = loading,
+                    onClick = {
+                        if (phone.isNotBlank()) {
+                            loading = true
+                            errorText = ""
+                            scope.launch {
+                                val result = com.payra.calling.data.backend.Auth.requestReset(phone)
+                                loading = false
+                                if (result is com.payra.calling.data.backend.AuthResult.Error) {
+                                    errorText = result.message
+                                } else {
+                                    sent = true
+                                }
+                            }
+                        }
+                    },
                     modifier = Modifier.enterFromBottom(4),
                 )
+                if (errorText.isNotEmpty()) ErrorText(errorText)
                 AnimatedVisibility(
                     visible = sent,
                     enter = fadeIn() + expandVertically(),

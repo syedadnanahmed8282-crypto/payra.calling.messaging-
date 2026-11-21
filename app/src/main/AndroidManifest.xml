@@ -46,6 +46,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Links from e-mails: reset password / confirm Gmail -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="payra" android:host="auth-callback" />
+            </intent-filter>
+
             <!-- "Share to Payra" from other apps -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

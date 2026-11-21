@@ -1,5 +1,11 @@
 package com.payra.calling.feature.auth
 
+import com.payra.calling.data.backend.AuthResult
+import com.payra.calling.data.backend.Auth
+import kotlinx.coroutines.launch
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -55,6 +61,10 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var shakeCount by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     GlowBackground {
         Column(
@@ -106,7 +116,7 @@ fun LoginScreen(
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
-                    ErrorText("Incorrect phone number or password")
+                    ErrorText(errorText.ifBlank { "Incorrect phone number or password." })
                 }
             }
 
@@ -120,17 +130,30 @@ fun LoginScreen(
             PayraPrimaryButton(
                 text = "Log in",
                 modifier = Modifier.enterFromBottom(5),
+                loading = loading,
                 onClick = {
                     if (phone.isBlank() || password.length < 6) {
+                        errorText = "Enter your phone number and password."
                         showError = true
                         shakeCount++
                     } else {
-                        onLoginSuccess()
+                        loading = true
+                        scope.launch {
+                            val result = Auth.signIn(phone, password)
+                            loading = false
+                            if (result is AuthResult.Error) {
+                                errorText = result.message
+                                showError = true
+                                shakeCount++
+                            } else {
+                                onLoginSuccess()
+                            }
+                        }
                     }
                 },
             )
             OrDivider(modifier = Modifier.enterFromBottom(6))
-            GoogleButton(onClick = onLoginSuccess, modifier = Modifier.enterFromBottom(7))
+            GoogleButton(onClick = { Toast.makeText(context, "Google sign-in is coming very soon. Please use your phone number for now.", Toast.LENGTH_LONG).show() }, modifier = Modifier.enterFromBottom(7))
 
             Row(
                 modifier = Modifier.fillMaxWidth().enterFromBottom(8),
